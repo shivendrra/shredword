@@ -1,158 +1,108 @@
 #include "tokenizer.h"
-#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
-#include <pthread.h>
-#include <stdint.h>
+#include <limits.h>
 
-static const char *vocabulary[] = {"a", "b", "c", "ab", "bc", "abc"};
-static const size_t vocab_size = sizeof(vocabulary) / sizeof(vocabulary[0]);
-
-typedef struct {
-  const char *first;
-  const char *second;
-  const char *merge_result;
-} MergePair;
-
-static const MergePair merge_pairs[] = {
-  {"a", "b", "ab"},
-  {"b", "c", "bc"},
-  {"ab", "c", "abc"}
-};
-static const size_t merge_pairs_size = sizeof(merge_pairs) / sizeof(merge_pairs[0]);
-
-#define FXHASH_SEED 0x9E3779B9
-static inline uint32_t fxhash(const void *data, size_t len) {
-  const uint8_t *ptr = (const uint8_t *)data;
-  uint32_t h = FXHASH_SEED;
-  for (size_t i = 0; i < len; i++) {
-    h ^= ptr[i];
-    h *= 0x01000193;
-  }
-  return h;
+void init_bpe_encoder(BpeEncoder *encoder, BpeEntry *entries, size_t num_entries) {
+  encoder->entries = entries;
+  encoder->num_entries = num_entries;
 }
 
-typedef struct HashEntry {
-  char *key;
-  char *value;
-  struct HashEntry *next;
-} HashEntry;
-
-typedef struct {
-  HashEntry **buckets;
-  size_t bucket_count;
-} HashMap;
-
-static HashMap *merge_cache;
-
-static HashMap* hashmap_create(size_t bucket_count) {
-  HashMap *map = malloc(sizeof(HashMap));
-  map->bucket_count = bucket_count;
-  map->buckets = calloc(bucket_count, sizeof(HashEntry*));
-  return map;
+void free_bpe_encoder(BpeEncoder *encoder) {
+  free(encoder->entries);
 }
 
-static void hashmap_insert(HashMap *map, const char *key, const char *value) {
-  uint32_t hash = fxhash(key, strlen(key)) % map->bucket_count;
-  HashEntry *entry = malloc(sizeof(HashEntry));
-  entry->key = strdup(key);
-  entry->value = strdup(value);
-  entry->next = map->buckets[hash];
-  map->buckets[hash] = entry;
-}
-
-static const char* hashmap_lookup(HashMap *map, const char *key) {
-  uint32_t hash = fxhash(key, strlen(key)) % map->bucket_count;
-  HashEntry *entry = map->buckets[hash];
-  while (entry) {
-    if (strcmp(entry->key, key) == 0) {
-      return entry->value;
-    }
-    entry = entry->next;
-  }
-  return NULL;
-}
-
-static void hashmap_free(HashMap *map) {
-  for (size_t i = 0; i < map->bucket_count; i++) {
-    HashEntry *entry = map->buckets[i];
-    while (entry) {
-      HashEntry *temp = entry;
-      entry = entry->next;
-      free(temp->key);
-      free(temp->value);
-      free(temp);
+Rank get_rank(const uint8_t *seq, size_t len, const BpeEncoder *encoder) {
+  for (size_t i = 0; i < encoder->num_entries; i++) {
+    if (encoder->entries[i].length == len && memcmp(encoder->entries[i].data, seq, len) == 0) {
+      return encoder->entries[i].rank;
     }
   }
-  free(map->buckets);
-  free(map);
+  return UINT_MAX;
 }
 
-void initialize_tokenizer(const char *vocab_file, const char *merge_file) {
-  merge_cache = hashmap_create(1024); // Cache with 1024 buckets for merges
-}
+size_t *byte_pair_merge(const uint8_t *piece, size_t len, const BpeEncoder *encoder, size_t *out_len) {
+  size_t *parts = (size_t *)malloc((len + 2) * sizeof(size_t));
+  if (!parts) return NULL;
+  for (size_t i = 0; i < len - 1; i++) {
+    parts[i] = get_rank(&piece[i], 2, encoder);
+  }
+  parts[len - 1] = UINT_MAX;
+  *out_len = len;
 
-TokenList tokenize(const char *input) {
-  TokenList token_list;
-  token_list.tokens = malloc(strlen(input) * sizeof(Token));
-  token_list.num_tokens = 0;
+  while (1) {
+    size_t min_rank = UINT_MAX;
+    size_t min_idx = UINT_MAX;
 
-  size_t i = 0;
-  while (i < strlen(input)) {
-    char token[256] = {0};
-    size_t token_len = 0;
-
-    for (size_t j = i; j < strlen(input); j++) {
-      token[token_len++] = input[j];
-      token[token_len] = '\0';
-
-      if (hashmap_lookup(merge_cache, token)) {
-        break;
+    for (size_t i = 0; i < *out_len - 1; i++) {
+      if (parts[i] < min_rank) {
+        min_rank = parts[i];
+        min_idx = i;
       }
     }
 
-    if (!hashmap_lookup(merge_cache, token)) {
-      token[0] = input[i];
-      token[1] = '\0';
-      token_len = 1;
+    if (min_rank == UINT_MAX) break;
+
+    for (size_t i = min_idx + 1; i < *out_len - 1; i++) {
+      parts[i] = parts[i + 1];
     }
-
-    token_list.tokens[token_list.num_tokens].data = strdup(token);
-    token_list.tokens[token_list.num_tokens].size = token_len;
-    token_list.num_tokens++;
-
-    i += token_len;
+    (*out_len)--;
   }
-
-  for (size_t i = 0; i < token_list.num_tokens - 1; i++) {
-    char merge_key[512];
-    snprintf(merge_key, sizeof(merge_key), "%s%s", token_list.tokens[i].data, token_list.tokens[i + 1].data);
-
-    const char *merged = hashmap_lookup(merge_cache, merge_key);
-    if (!merged) {
-      merged = merge_key;
-      hashmap_insert(merge_cache, merge_key, merged);
-    }
-
-    if (merged) {
-      free(token_list.tokens[i].data);
-      free(token_list.tokens[i + 1].data);
-      token_list.tokens[i].data = strdup(merged);
-      token_list.tokens[i].size = strlen(merged);
-
-      // Shift tokens
-      for (size_t j = i + 1; j < token_list.num_tokens - 1; j++) {
-        token_list.tokens[j] = token_list.tokens[j + 1];
-      }
-      token_list.num_tokens--;
-    }
-  }
-
-  return token_list;
+  return parts;
 }
 
-void free_token_list(TokenList *token_list) {
-  for (size_t i = 0; i < token_list->num_tokens; i++) {
-    free(token_list->tokens[i].data);
+Rank *byte_pair_encode(const uint8_t *piece, size_t len, const BpeEncoder *encoder, size_t *out_len) {
+  size_t merged_len;
+  size_t *merged_parts = byte_pair_merge(piece, len, encoder, &merged_len);
+  
+  if (!merged_parts) return NULL;
+  Rank *encoded = (Rank *)malloc((merged_len - 1) * sizeof(Rank));
+  if (!encoded) {
+    free(merged_parts);
+    return NULL;
   }
-  free(token_list->tokens);
+
+  for (size_t i = 0; i < merged_len - 1; i++) {
+    encoded[i] = get_rank(&piece[merged_parts[i]], 2, encoder);
+  }
+
+  *out_len = merged_len - 1;
+  free(merged_parts);
+  return encoded;
+}
+
+uint8_t **byte_pair_split(const uint8_t *piece, size_t len, const BpeEncoder *encoder, size_t *out_len) {
+  size_t merged_len;
+  size_t *merged_parts = byte_pair_merge(piece, len, encoder, &merged_len);
+  
+  if (!merged_parts) return NULL;
+  uint8_t **split = (uint8_t **)malloc((merged_len - 1) * sizeof(uint8_t *));
+  if (!split) {
+    free(merged_parts);
+    return NULL;
+  }
+
+  for (size_t i = 0; i < merged_len - 1; i++) {
+    size_t start = merged_parts[i];
+    size_t end = (i + 1 < merged_len) ? merged_parts[i + 1] : len;
+
+    split[i] = (uint8_t *)malloc((end - start + 1) * sizeof(uint8_t));
+    memcpy(split[i], &piece[start], end - start);
+    split[i][end - start] = '\0';
+  }
+
+  *out_len = merged_len - 1;
+  free(merged_parts);
+  return split;
+}
+
+void free_encoded_output(Rank *encoded) {
+  free(encoded);
+}
+
+void free_split_output(uint8_t **split, size_t num_pieces) {
+  for (size_t i = 0; i < num_pieces; i++) {
+    free(split[i]);
+  }
+  free(split);
 }
