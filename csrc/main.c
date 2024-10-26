@@ -30,7 +30,7 @@ char *read_file(const char *filename) {
 }
 
 int main() {
-  const char *file_path = "../training_data.txt"; // Change to your file path
+  const char *file_path = "../new.txt"; // Change to your file path
   char *text = read_file(file_path);
   if (text == NULL) {
     fprintf(stderr, "Reading file failed!\n");
@@ -39,18 +39,23 @@ int main() {
   printf("File read successfully\n");
 
   init_vocab();
-  size_t target_vocab_size = 280;
+  size_t target_vocab_size = 500;
   train(text, target_vocab_size, true);
 
   // Print the vocabulary (int -> str)
   printf("Vocabulary:\n");
   for (size_t i = 0; i < target_vocab_size; i++) {
-    const char *token = get_token_from_vocab(i); // Assume this function gets the string from the vocab
-    printf("%d -> %s\n", i, token);
+    const char *token = get_token_from_vocab(i);
+    if (token) { // Check for NULL token
+      printf("%zu -> %s\n", i, token);
+      free((void *)token); // Free the rendered token after use
+    } else {
+      printf("%zu -> NULL\n", i); // Token was NULL
+    }
   }
 
   const char *sample_text = text;
-  int *encoded_ids;
+  Token *encoded_ids = NULL;  // Change to Token type
   size_t encoded_length;
 
   encode(sample_text, &encoded_ids, &encoded_length);

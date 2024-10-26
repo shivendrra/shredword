@@ -1,43 +1,43 @@
 #ifndef __BASE__H__
 #define __BASE__H__
 
-#include <stdbool.h>
-#include <stdint.h>
-#include <stddef.h>
+#include <stdbool.h>  // for bool type
+#include <stdint.h>   // for uint16_t and other fixed-width integers
+#include <stddef.h>   // for size_t
 
-#define BASE_VOCAB_SIZE 256
-#define TARGET_VOCAB_SIZE 0
+#define BASE_VOCAB_SIZE 256  // default base vocabulary size
 
-// structure to store a pair of tokens
+// store a pair of tokens
 typedef struct Pair {
   int first;
   int second;
 } Pair;
 
-typedef struct {
+// store a pair with a frequency count
+typedef struct PairCount {
   int first;
   int second;
-  size_t count;
+  size_t count;  // occurrence count of the pair
 } PairCount;
 
-typedef uint8_t Token;  // default; this will change dynamically
+typedef uint16_t Token; // token type is int16
 
-extern Pair *merges;
-extern Token **vocab;
-extern size_t vocab_size;
-extern size_t num_merges;
+// global variables
+extern Token **vocab;           // 2D array representing the vocabulary
+extern size_t vocab_size;       // current vocabulary size
+extern Pair *merges;            // array of token pairs for merging
+extern size_t num_merges;       // number of merges performed
 
 void init_vocab();
 void free_vocab();
 void build_vocab(Pair *merges, size_t num_merges);
 void replace_control_characters(char *str);
 char *render_token(const Token *token);
-void get_stats(const Token *ids, size_t length, PairCount *stats, size_t *stats_size, size_t capacity);
+void get_stats(const Token *ids, size_t length, PairCount **stats, size_t *stats_size, size_t *capacity);
 void merge(const Token *ids, size_t length, Token *merged_ids, size_t *merged_length, Pair pair, Token new_token);
-void encode(const char *text, int **ids, size_t *length);
-char *decode(const int *ids, size_t length);
+void encode(const char *text, Token **ids, size_t *length);
+char *decode(const Token *ids, size_t length);
 void train(const char *text, size_t target_vocab_size, bool verbose);
 const char *get_token_from_vocab(size_t index);
-void select_token_type(size_t vocab_size);
 
 #endif  // !__BASE__H__
