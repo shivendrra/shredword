@@ -1,3 +1,8 @@
+/*
+  main run file for base.c & base.h tokenizer
+  run: gcc main.c base.c -o main .\main
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
