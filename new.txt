@@ -1,0 +1,8 @@
+good at separating bananas from balloons. We need a different variable. Let’s add an axis for roundness. Now we’ve got a two dimensional space with the 
+round balloons up here and the banana down here. But if we look at more data we may come 
+across a banana that’s pretty round,   and a balloon that isn’t. So maybe there’s some way to measure shininess. Balloons usually have a shiny spot. Now we have a three dimensional space. And ideally, when we get a new image we 
+can measure those 3 variables and see   whether it falls in the banana region 
+or the balloon region of the space. But what if we want our model to recognize,   not just bananas and balloons, 
+but…all these other things. Yellowness, roundness, and shininess don’t 
+capture what’s distinct about these objects. That’s what deep learning algorithms do 
+as they go through all the training data. They find variables that help improve their 
