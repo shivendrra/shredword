@@ -1,10 +1,3 @@
-"""
---> contains important functions for tokenization and training bpe
---> save/load functions are also available
---> for understanding the functionality and basic implementaion only
---> inspired(copied) from Karpathy's minbpe
-"""
-
 import regex as re
 import unicodedata
 
@@ -73,114 +66,71 @@ def build_vocab(merges, special_tokens):
   return vocab
 
 def replace_control_characters(s: str) -> str:
+  # we don't want to print control characters
+  # which distort the output (e.g. \n)
   chars = []
   for ch in s:
-      if unicodedata.category(ch)[0] != "C":
-          chars.append(ch)
-      else:
-          chars.append(f"\\u{ord(ch):04x}")
+    if unicodedata.category(ch)[0] != "C":
+      chars.append(ch) # this character is ok
+    else:
+      chars.append(f"\\u{ord(ch):04x}") # escape
   return "".join(chars)
 
 def render_token(t: bytes) -> str:
+  # pretty print a token, escaping control characters
   s = t.decode('utf-8', errors='replace')
   s = replace_control_characters(s)
   return s
 
-def decode(ids):
-  text_bytes = b"".join(vocab[idx] for idx in ids)
-  text = text_bytes.decode("utf-8", errors="replace")
-  return text
+class BaseTokenizer:
+  def __init__(self):
+    # default: vocab size of 256 (all bytes), no merges, no patterns
+    self.merges = {} # (int, int) -> int
+    self.pattern = ""
+    self.special_tokens = {} # str -> int, e.g. {'<|endoftext|>': 100257}
+    self.vocab = build_vocab() # int -> bytes
 
-def encode(text):
-  text_bytes = text.encode("utf-8")
-  ids = list(text_bytes)
-  while len(ids) >= 2:
-    stats = get_stats(ids)
-    pair = min(stats, key=lambda p: merges.get(p, float('inf')))
-    if pair not in merges:
-      break
+  # placeholder functions, implemented in child class
+  def train(self, text, vocab_size, verbose=False): raise NotImplementedError
+  def encode(self, text): raise NotImplementedError
+  def decode(self, ids): raise NotImplementedError
 
-    idx = merges[pair]
-    ids = merge(ids, pair, idx)
-  return ids
+  def save(self, file_prefix):
+    # saves two files: ``.model`` & ``.vocab``
+    # `.vocab` human readable version thats just for debugging & pretty presentation
+    # `.model` for furthur training & implementing merges, can be loaded in model
+    model_file = file_prefix + ".model"
+    with open(model_file, 'w') as f:
+      f.write("shredword v1.0\n")
+      f.write(f"{self.pattern}\n")
+      f.write(f"{len(self.special_tokens)}\n")
+      for special, idx in self.special_tokens.items():
+        f.write(f"{special} {idx}\n")
+      for idx1, idx2 in self.merges:
+        f.write(f"{idx1} {idx2}\n")
+    vocab_file, inverted_merges = file_prefix + ".vocab", {idx: pair for pair, idx in self.merges.items()}
+    with open(vocab_file, "w", encoding="utf-8") as f:
+      for idx, token in self.vocab.items():
+        s = render_token(token)
+        if idx in inverted_merges:
+          idx0, idx1 = inverted_merges[idx]
+          s0, s1 = render_token(self.vocab[idx0]), render_token(self.vocab[idx1])
+          f.write(f"[{s0}][{s1}] -> [{s}] {idx}\n")
+        else: f.write(f"[{s}] {idx}\n")
+      f.close()
 
-def train(text, vocab_size, verbose=False):
-  """
-    training loop for the bpe tokenizer
-  """
-  assert vocab_size >= 256
-
-  num_merges = vocab_size - 256
-  text_bytes = text.encode("utf-8")
-  ids = list(text_bytes)
-
-  for i in range(num_merges):
-    stats = get_stats(ids)
-    pair = max(stats, key=stats.get)
-    idx = 256 + i
-    ids = merge(ids, pair, idx)
-    merges[pair] = idx
-    vocab[idx] = vocab[pair[0]] + vocab[pair[1]]
-
-    if verbose:
-      print(f"merge {i+1}/{num_merges}: {pair} -> {idx} ({vocab[idx]}) had {stats[pair]} occurrences")
-
-def save_model(file_name):
-  """
-    Saves two files: file_prefix.vocab and file_prefix.model
-    This is inspired (but not equivalent to!) sentencepiece's model saving:
-    - model file is the critical one, intended for load()
-    - vocab file is just a pretty printed version for human inspection only
-  """
-  model_file = file_name + ".model"
-  inverted_merges = {idx: pair for pair, idx in merges.items()}
-  with open(model_file, 'w') as f:
-    f.write("minibpe v1\n")
-    f.write(f"{pattern}\n")
-    f.write(f"{len(special_tokens)}\n")
-    for special, idx in special_tokens.items():
-      f.write(f"{special} {idx}\n")
-    for idx1, idx2 in merges:
-      f.write(f"{idx1} {idx2}\n")
-    
-  vocab_file = file_name + ".vocab"
-  with open(vocab_file, 'w') as f:
-    for idx, token in vocab.items():
-      s = render_token(token)
-      if idx in inverted_merges:
-        idx0, idx1 = inverted_merges[idx]
-        s0 = render_token(vocab[idx0])
-        s1 = render_token(vocab[idx1])
-        f.write(f"[{s0}][{s1}] -> [{s}] {idx}\n")
-      else:
-        f.write(f"[{s}] {idx}\n")
-
-def load(model_file):
-  """
-    loads '.model' file
-    returns vocab loaded from the file
-  """
-  assert model_file.endswith('.model')
-  merges = {}
-  special_tokens = {}
-  idx = 256
-  with open(model_file, 'r', encoding='utf-8') as f:
-    version = f.readline().strip()
-    assert version == "minbpe v1"
-
-    pattern = f.readline().strip()
-    num_special = int(f.readline().strip())
-    for _ in range(num_special):
-      special, special_idx = f.readline().strip().split()
-      special_tokens[special] = int(special_idx)
-    
-    for line in f:
-      idx1, idx2 = map(int, line.split())
-      merges[(idx1, idx2)] = idx
-      idx += 1
-    
-    merges = merges
-    special_tokens = special_tokens
-    vocab = build_vocab(merges, special_tokens)
-  
-  return vocab
+  def load(self, model_file):
+    assert model_file.endswith(".model")
+    merges, special_tokens, idx = {}, {}, 256
+    with open(model_file, 'r', encoding="utf-8") as f:
+      version = f.readline().strip()
+      assert version == "minbpe v1"
+      self.pattern, num_special = f.readline().strip(), int(f.readline().strip())
+      for _ in range(num_special):
+        special, special_idx = f.readline().strip().split()
+        special_tokens[special] = int(special_idx)
+      for line in f:
+        idx1, idx2 = map(int, line.split())
+        merges[(idx1, idx2)] = idx
+        idx += 1
+    self.merges, self.special_tokens, self.vocab = merges, special_tokens, build_vocab()
