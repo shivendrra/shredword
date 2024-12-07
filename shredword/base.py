@@ -1,5 +1,6 @@
 import regex as re
 import unicodedata
+from collections import deque, Counter
 
 merges = {}
 vocab = {idx: bytes([idx]) for idx in range(256)}
@@ -12,26 +13,27 @@ def get_stats(ids, counts=None):
     eg: [1, 2, 3, 1, 2] -> {(1, 2): 2, (2, 3): 1, (3, 1): 1}
     allows to update an existing dictionary of counts
   """
-  counts = {} if counts is None else counts
-  for pair in zip(ids, ids[1:]):
-    counts[pair] = counts.get(pair, 0) + 1
-  return counts
+  # counts = {} if counts is None else counts
+  # for pair in zip(ids, ids[1:]):
+  #   counts[pair] = counts.get(pair, 0) + 1
+  # return counts
+  return Counter(zip(ids, ids[1:])) # using Counter over the previous code logic is better as it's optimzed for task like this
 
 def merge(ids, pair, idx):
   """
     in the list of integers, replaces all consecutive pair with the new integer token idx
     eg: ids=[1, 2, 3, 1, 2], pair=(1, 2), idx=4 -> [4, 3, 4]
   """
-  new_ids = []
-  i = 0
+  # merged = []
+  merged, i = deque(), 0 # replaced [] -> deque to minimize the memory reallocations
   while i < len(ids):
     if i+1 < len(ids) and ids[i] == pair[0] and ids[i+1] == pair[1]:
-      new_ids.append(idx)
+      merged.append(idx)
       i += 2
     else:
-      new_ids.append(ids[i])
+      merged.append(ids[i])
       i += 1
-  return new_ids
+  return list(merged)
 
 def apply_regex(text):
   r"""
@@ -56,13 +58,24 @@ def apply_regex(text):
   return text
 
 def build_vocab(merges, special_tokens):
+  """
+    ## this function basically builds the primary vocab (0-255)
+    ## uses 256-ascii characters & put them into a key-value paired dictonary to form
+    a lookup table to build merges & get stats of total pairs of bytes
+    so the base vocab looks something like this: {'!':0, 'a': 1, 'b': 2, 'c':3 ....., 'x03':255}
+
+    ## uses provided merges & adds new entries to original vocab & also incorporates the 
+    special tokens: <|endoftext|>, <|mask|>, <|startoftext|>, etc.
+    basically, builds a map of each byte pair to a corresponding integer value/representation
+
+      merges = {('a', 'b'): 256, ('c', 'd'): 257}
+      special_tokens = {'<pad>': 258, '<unk>': 259}
+  """
   vocab = {idx: bytes([idx]) for idx in range(256)}
   for (p0, p1), idx in merges.items():
     vocab[idx] = vocab[p0] + vocab[p1]
-  
   for special, idx in special_tokens.items():
     vocab[idx] = special.encode("utf-8")
-  
   return vocab
 
 def replace_control_characters(s: str) -> str:
@@ -88,7 +101,7 @@ class BaseTokenizer:
     self.merges = {} # (int, int) -> int
     self.pattern = ""
     self.special_tokens = {} # str -> int, e.g. {'<|endoftext|>': 100257}
-    self.vocab = build_vocab() # int -> bytes
+    self.vocab = build_vocab(self.merges, self.special_tokens) # int -> bytes
 
   # placeholder functions, implemented in child class
   def train(self, text, vocab_size, verbose=False): raise NotImplementedError
@@ -101,7 +114,7 @@ class BaseTokenizer:
     # `.model` for furthur training & implementing merges, can be loaded in model
     model_file = file_prefix + ".model"
     with open(model_file, 'w') as f:
-      f.write("shredword v1.0\n")
+      f.write("shredword v1\n")
       f.write(f"{self.pattern}\n")
       f.write(f"{len(self.special_tokens)}\n")
       for special, idx in self.special_tokens.items():
@@ -124,7 +137,7 @@ class BaseTokenizer:
     merges, special_tokens, idx = {}, {}, 256
     with open(model_file, 'r', encoding="utf-8") as f:
       version = f.readline().strip()
-      assert version == "minbpe v1"
+      assert version == "shredword v1"
       self.pattern, num_special = f.readline().strip(), int(f.readline().strip())
       for _ in range(num_special):
         special, special_idx = f.readline().strip().split()
@@ -133,4 +146,4 @@ class BaseTokenizer:
         idx1, idx2 = map(int, line.split())
         merges[(idx1, idx2)] = idx
         idx += 1
-    self.merges, self.special_tokens, self.vocab = merges, special_tokens, build_vocab()
+    self.merges, self.special_tokens, self.vocab = merges, special_tokens, build_vocab(merges, special_tokens)
