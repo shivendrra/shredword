@@ -14,6 +14,7 @@
 #include <stdbool.h>  // for bool type
 #include <stdint.h>   // for uint32_t & others
 #include <stddef.h>   // for size_t
+#define BASE_VOCAB_SIZE 256   // default vocab size
 
 // storeing the token pairs
 typedef struct pairs {
