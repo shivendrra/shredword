@@ -2,50 +2,49 @@
   base.h
   - base class for basic BPE functions & logics
   - all classes to be built on top of this code, since it has necessary blocks
-  - to be compiled with ``tokenizer.cpp`` containing the main logic (no regex, no caching)
-  - compile it as:
-    -- '.so': g++ -shared -fPIC -o libtensor.so tokenizer.cpp base.cpp / for linux
-    -- '.dll': g++ -shared -o libtensor.dll tokenizer.cpp base.cpp / for windows
+  - to be compiled with ``tokenizer.cpp`` containing the main logic
+    (no regex, no caching)
 */
 
 #ifndef __BASE__H__
 #define __BASE__H__
 
-#include <stdbool.h>  // for bool type
-#include <stdint.h>   // for uint32_t & others
-#include <stddef.h>   // for size_t
-#define BASE_VOCAB_SIZE 256   // default vocab size
+#define  VOCAB_SIZE 256
+#define  MAX_LINE_LENGTH 1024
+#define  MAX_SPECIAL_TOKENS 100
+#define  MAX_MERGES 10000
 
-// storeing the token pairs
-typedef struct pairs {
-  int *first, *second;
-} pairs;
+typedef struct {
+  int idx1, idx2;
+} Pair;
 
-// storing the token pair & frequency count
-typedef struct paircount {
-  int first, second;
-  size_t count; // occurence count of pair
-} paircount;
+typedef struct {
+  int idx;
+  char* value;
+} VocabEntry;
 
-typedef uint32_t Token;
+typedef struct {
+  Pair pair;
+  int idx;
+} MergeEntry;
 
-extern Token **vocab;         // 2-d array representation of vocab
-extern size_t vocab_size;     // current vocab size
-extern pairs* merges;         // array of token pairs for merge
-extern size_t n_merges;     // no of merges performed
+typedef struct {
+  VocabEntry vocab[VOCAB_SIZE + MAX_MERGES];
+  MergeEntry merges[MAX_MERGES];
+  int merge_count, vocab_size, special_token_indices[MAX_SPECIAL_TOKENS], special_token_count;
+  char special_tokens[MAX_SPECIAL_TOKENS][MAX_LINE_LENGTH], pattern[MAX_LINE_LENGTH];
+} BaseTokenizer;
 
 extern "C" {
-  void init_vocab();
-  void free_vocab();
-  void build_vocab(pairs* merges, size_t n_merges);
-  void replace_control_characters(char* str);
-  char* render_token(const Token* token);
-  void get_stats(const Token* ids, size_t len, paircount** stats, size_t* stats_size, size_t* capacity);
-  void merge(const Token* ids, size_t len, Token* merged_ids, size_t* merged_len, pairs pair, Token new_token);
-  void encode(const char *text, Token** ids, size_t len);
-  char* decode(const Token* ids, size_t len);
-  void train(const char* text, size_t target_vocab_size, bool verbose);
-  const char* get_token_from_vocab(size_t index);
+  void init_tokenizer(BaseTokenizer* tokenizer);
+  void build_vocab(BaseTokenizer* tokenizer);
+  void replace_control_characters(const char* input, char* output);
+  void save_tokenizer(const BaseTokenizer* tokenizer, const char* file_path);
+  void load_tokenizer(BaseTokenizer* tokenizer, const char* model_file);
+  void get_stats(const int* ids, int ids_size, int stats[MAX_MERGES][3]);
+  int* merge(const int* ids, int ids_size, Pair pair, int idx, size_t* new_size);
+  void render_token(const char* token, char* output);
+  void free_tokenizer(BaseTokenizer* tokenizer);
 }
 
 #endif
