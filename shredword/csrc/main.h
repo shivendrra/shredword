@@ -23,6 +23,8 @@ extern "C" {
   void train(Shred* tokenizer, const char* text, int vocab_size, bool verbose);
   char* decode(Shred* tokenizer, const int* ids, int ids_size);
   int* encode(Shred* tokenizer, const char* text, int* output_size);
+  void save_model(const Shred* tokenizer, const char* file_path);
+  void load_model(Shred* tokenizer, const char* model_file);
 }
 
 #endif

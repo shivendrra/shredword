@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <string.h>
 #include "main.h"
 
@@ -28,8 +29,9 @@ char* read_file(const char* filename) {
 
 int main() {
   // paths to input files
-  const char* train_file = "test_data/captions.txt";
-  const char* test_file = "test_data/new.txt";
+  const char* train_file = "captions.txt";
+  const char* test_file = "new.txt";
+  const char* model_file = "tokenizer.model";
 
   // reading training and test data
   printf("Reading training data from %s...\n", train_file);
@@ -44,33 +46,48 @@ int main() {
   Shred tokenizer;
   init_shred(&tokenizer);
 
-  // training tokenizer
-  int target_vocab_size = 356;
-  bool verbose = true;
-  printf("Training tokenizer...\n");
-  train(&tokenizer, train_text, target_vocab_size, verbose);
-  printf("Training complete.\n");
+  // loading or train the tokenizer
+  if (_access(model_file, 0) == 0) { // check if the model file exists
+    printf("Loading tokenizer model from %s...\n", model_file);
+    load_model(&tokenizer, model_file);
+    printf("Tokenizer model loaded.\n");
+  } else {
+    printf("Training tokenizer...\n");
+    train(&tokenizer, train_text, 356, true);
+    printf("Training complete.\n");
+
+    printf("Saving tokenizer model to %s...\n", model_file);
+    save_model(&tokenizer, model_file);
+    printf("Tokenizer model saved.\n");
+  }
 
   // encoding test data
   printf("Encoding test data...\n");
   int encoded_size;
   int* encoded_ids = encode(&tokenizer, test_text, &encoded_size);
-  printf("Encoded IDs: ");
-  for (int i = 0; i < encoded_size && i < 20; i++) { // printing only the first 20 IDs
+  printf("Encoded IDs (%d tokens): ", encoded_size);
+  for (int i = 0; i < encoded_size; i++) {
     printf("%d ", encoded_ids[i]);
   }
-  printf("... (truncated)\n\n");
+  printf("\n\n");
 
   // decoding the encoded data
   printf("Decoding back to text...\n");
   char* decoded_text = decode(&tokenizer, encoded_ids, encoded_size);
-  printf("Decoded text (first 200 chars): %.200s\n\n", decoded_text);
+  printf("Decoded text (%lu characters):\n%s\n\n", strlen(decoded_text), decoded_text);
 
-  // verify if original and decoded texts are identical
+  // verify original and decoded texts
   if (strcmp(test_text, decoded_text) == 0) {
     printf("Decoded text matches the original test text.\n");
   } else {
     printf("Decoded text does NOT match the original test text.\n");
+    // locating the first difference
+    for (size_t i = 0; i < strlen(test_text); i++) {
+      if (test_text[i] != decoded_text[i]) {
+        printf("Mismatch at character %lu: Original '%c', Decoded '%c'\n", i, test_text[i], decoded_text[i]);
+        break;
+      }
+    }
   }
 
   // cleanup

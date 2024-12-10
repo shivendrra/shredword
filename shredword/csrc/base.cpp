@@ -8,6 +8,7 @@ void init_tokenizer(BaseTokenizer* tokenizer) {
   tokenizer->merge_count = 0;
   tokenizer->vocab_size = VOCAB_SIZE;
   tokenizer->special_token_count = 0;
+  tokenizer->pattern = NULL;
   for (int i = 0; i < VOCAB_SIZE; i++) {
     tokenizer->vocab[i].idx = i;
     tokenizer->vocab[i].value = (char*)malloc(2);
@@ -86,13 +87,12 @@ int* merge(const int* ids, int ids_size, Pair pair, int idx, size_t* new_size) {
   return new_ids;
 }
 
-
 void save_tokenizer(const BaseTokenizer* tokenizer, const char* file_prefix) {
   char model_file[MAX_LINE_LENGTH];
   snprintf(model_file, MAX_LINE_LENGTH, "%s.model", file_prefix);
 
   FILE* model_fp = fopen(model_file, "w");
-  fprintf(model_fp, "BaseTokenizerword v1\n%s\n%d\n", tokenizer->pattern, tokenizer->special_token_count);
+  fprintf(model_fp, "bpe v1\n%s\n%d\n", tokenizer->pattern, tokenizer->special_token_count);
   for (int i = 0; i < tokenizer->special_token_count; i++) {
     fprintf(model_fp, "%s %d\n", tokenizer->special_tokens[i], tokenizer->special_token_indices[i]);
   }

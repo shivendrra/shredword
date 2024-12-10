@@ -12,19 +12,24 @@ void train(Shred* tokenizer, const char* text, int vocab_size, bool verbose) {
   assert(vocab_size >= VOCAB_SIZE);
   int n_merges = vocab_size - VOCAB_SIZE;
   size_t text_len = strlen(text);
-  unsigned char* text_bytes = (unsigned char*)malloc(sizeof(text_len+1));
+
+  unsigned char* text_bytes = (unsigned char*)malloc((text_len + 1) * sizeof(unsigned char));
+  if (!text_bytes) {
+    fprintf(stderr, "Error: Memory allocation for text_bytes failed.\n");
+    exit(EXIT_FAILURE);
+  }
   memcpy(text_bytes, text, text_len);
   text_bytes[text_len] = '\0';
 
   int* ids = (int*)malloc(text_len * sizeof(int));
   if (!ids) {
-  fprintf(stderr, "Error: Memory allocation for ids failed.\n");
-  exit(EXIT_FAILURE);
+    fprintf(stderr, "Error: Memory allocation for ids failed.\n");
+    free(text_bytes);
+    exit(EXIT_FAILURE);
   }
   for (size_t i = 0; i < text_len; i++) {
     ids[i] = text_bytes[i];
   }
-
   Pair merges[MAX_MERGES];
   VocabEntry vocab[VOCAB_SIZE + MAX_MERGES];
   memcpy(vocab, tokenizer->base.vocab, VOCAB_SIZE * sizeof(VocabEntry));
@@ -132,4 +137,12 @@ int* encode(Shred* tokenizer, const char* text, int* output_size) {
   *output_size = text_len;
   free(text_bytes);
   return ids;
+}
+
+void save_model(const Shred* tokenizer, const char* file_path) {
+  save_tokenizer(&(tokenizer->base), file_path);
+}
+
+void load_model(Shred* tokenizer, const char* model_file) {
+  load_tokenizer(&(tokenizer->base), model_file);
 }
