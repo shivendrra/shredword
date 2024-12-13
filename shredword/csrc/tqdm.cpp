@@ -101,6 +101,10 @@ void print_tqdm(tqdm* bar, bool close) {
   }
 }
 
+void close_tqdm(tqdm* bar) {
+  bar->disable = true;
+}
+
 void dfs(void* x, PrettyCacheEntry* cache, size_t cache_size, void** (*srcfn)(void*)) {
   for (void** srcs = srcfn(x); srcs && *srcs; ++srcs) {
     PrettyCacheEntry* entry = &cache[(size_t)*srcs % cache_size];

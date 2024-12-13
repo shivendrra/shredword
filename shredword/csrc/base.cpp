@@ -8,7 +8,6 @@ void init_tokenizer(BaseTokenizer* tokenizer) {
   tokenizer->merge_count = 0;
   tokenizer->vocab_size = VOCAB_SIZE;
   tokenizer->special_token_count = 0;
-  tokenizer->pattern = NULL;
   for (int i = 0; i < VOCAB_SIZE; i++) {
     tokenizer->vocab[i].idx = i;
     tokenizer->vocab[i].value = (char*)malloc(2);

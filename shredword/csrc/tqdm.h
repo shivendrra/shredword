@@ -38,6 +38,7 @@ extern "C" {
   void print_tqdm(tqdm* bar, bool close);
   void HMS(double seconds, char* output);
   void SI(double value, char* output);
+  void close_tqdm(tqdm* bar);
 
   void init_trange(tqdm *bar, int n, const char *desc, bool disable, const char *unit, bool unit_scale, int rate);
   char *pretty_print(          // pretty_print: recursively format and print hierarchical data

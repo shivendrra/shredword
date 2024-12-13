@@ -1,3 +1,10 @@
+/*
+  @run.cpp
+  - main run file for testing the bpe tokenization logic
+  - compile as: g++ -o run run.cpp main.cpp base.cpp
+    - run: ./run
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -53,7 +60,7 @@ int main() {
     printf("Tokenizer model loaded.\n");
   } else {
     printf("Training tokenizer...\n");
-    train(&tokenizer, train_text, 356, true);
+    train(&tokenizer, train_text, 280, false);
     printf("Training complete.\n");
 
     printf("Saving tokenizer model to %s...\n", model_file);

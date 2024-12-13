@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include "main.h"
 #include "base.h"
+#include "tqdm.h"
 
 void init_shred(Shred* tokenizer) {
  init_tokenizer(&(tokenizer->base));
@@ -33,12 +34,17 @@ void train(Shred* tokenizer, const char* text, int vocab_size, bool verbose) {
   Pair merges[MAX_MERGES];
   VocabEntry vocab[VOCAB_SIZE + MAX_MERGES];
   memcpy(vocab, tokenizer->base.vocab, VOCAB_SIZE * sizeof(VocabEntry));
+  
+  // tqdm progress bar initialization
+  tqdm bar;
+  init_tqdm(&bar, "Training BPE tokenizer: ", false, "merges", true, n_merges, 1);
 
   for (int i = 0; i < n_merges; i++) {
-    
+    update_tqdm(&bar, 1, i == n_merges - 1);
+
     // debug statements ---------
-    printf("Starting merge iteration %d/%d...\n", i + 1, n_merges);
-    fflush(stdout); // force output to appear immediately
+    // printf("Starting merge iteration %d/%d...\n", i + 1, n_merges);
+    // fflush(stdout); // force output to appear immediately
     // ----------
     
     int stats[MAX_MERGES][3];
@@ -74,6 +80,7 @@ void train(Shred* tokenizer, const char* text, int vocab_size, bool verbose) {
              vocab[new_idx].value, max_occurrences);
     }
   }
+  close_tqdm(&bar);
   tokenizer->base.merge_count = n_merges;
   memcpy(tokenizer->base.merges, merges, n_merges * sizeof(Pair));
   memcpy(tokenizer->base.vocab, vocab, (n_merges + VOCAB_SIZE) * sizeof(VocabEntry));
