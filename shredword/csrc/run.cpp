@@ -1,7 +1,7 @@
 /*
   @run.cpp
   - main run file for testing the bpe tokenization logic
-  - compile as: g++ -o run run.cpp main.cpp base.cpp
+  - compile as: g++ -o run run.cpp main.cpp base.cpp tqdm.cpp
     - run: ./run
 */
 

@@ -4,8 +4,8 @@
   - wrapper over the ``base.cpp`` & it's functions, handling the training, encoding & decoding taks
   - to be compiled with ``base.cpp`` containing the main logic (no regex, no caching)
   - compile it as:
-    -- '.so': g++ -shared -fPIC -o libtoken.so main.cpp base.cpp / for linux
-    -- '.dll': g++ -shared -o libtoken.dll main.cpp base.cpp / for windows
+    -- '.so': g++ -shared -fPIC -o libtoken.so main.cpp tqdm.cpp base.cpp / for linux
+    -- '.dll': g++ -shared -o libtoken.dll main.cpp tqdm.cpp base.cpp / for windows
 */
 
 #ifndef __MAIN__H__

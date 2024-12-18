@@ -60,6 +60,7 @@ void update_tqdm(tqdm* bar, int increments, bool close) {
   if (bar->current % bar->skip != 0 && !close) return;
 
   print_tqdm(bar, close);
+  fflush(stdout);
 }
 
 void print_tqdm(tqdm* bar, bool close) {
