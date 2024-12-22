@@ -14,6 +14,10 @@ void init_tokenizer(BaseTokenizer* tokenizer) {
     tokenizer->vocab[i].value[0] = (char)i;
     tokenizer->vocab[i].value[1] = '\0';
   }
+  for (int i = 0; i < MAX_MERGES; i++) {
+    tokenizer->merges[i].pair.idx1 = -1;
+    tokenizer->merges[i].pair.idx2 = -1;
+  }
 }
 
 void build_vocab(BaseTokenizer* tokenizer) {
@@ -89,27 +93,38 @@ int* merge(const int* ids, int ids_size, Pair pair, int idx, size_t* new_size) {
 void save_tokenizer(const BaseTokenizer* tokenizer, const char* file_prefix) {
   char model_file[MAX_LINE_LENGTH];
   snprintf(model_file, MAX_LINE_LENGTH, "%s.model", file_prefix);
-
   FILE* model_fp = fopen(model_file, "w");
+  if (!model_fp) {
+    fprintf(stderr, "Error: Unable to open file %s for writing.\n", model_file);
+    return;
+  }
   fprintf(model_fp, "bpe v1\n%s\n%d\n", tokenizer->pattern, tokenizer->special_token_count);
   for (int i = 0; i < tokenizer->special_token_count; i++) {
     fprintf(model_fp, "%s %d\n", tokenizer->special_tokens[i], tokenizer->special_token_indices[i]);
   }
   for (int i = 0; i < tokenizer->merge_count; i++) {
-    fprintf(model_fp, "%d %d\n", tokenizer->merges[i].pair.idx1, tokenizer->merges[i].pair.idx2);
+    Pair pair = tokenizer->merges[i].pair;
+    // skipping uninitialized merge entries
+    if (pair.idx1 == -1 && pair.idx2 == -1) continue;
+    fprintf(model_fp, "%d %d\n", pair.idx1, pair.idx2);
   }
   fclose(model_fp);
-
+  
+  // saving vocabulary for debugging
   char vocab_file[MAX_LINE_LENGTH];
   snprintf(vocab_file, MAX_LINE_LENGTH, "%s.vocab", file_prefix);
-
   FILE* vocab_fp = fopen(vocab_file, "w");
+  if (!vocab_fp) {
+    fprintf(stderr, "Error: Unable to open file %s for writing.\n", vocab_file);
+    return;
+  }
   for (int i = 0; i < tokenizer->vocab_size + tokenizer->merge_count + tokenizer->special_token_count; i++) {
     char rendered[MAX_LINE_LENGTH];
     render_token(tokenizer->vocab[i].value, rendered);
     fprintf(vocab_fp, "[%s] %d\n", rendered, tokenizer->vocab[i].idx);
   }
   fclose(vocab_fp);
+  printf("Tokenizer model saved successfully to %s.\n", file_prefix);
 }
 
 void load_tokenizer(BaseTokenizer* tokenizer, const char* model_file) {
