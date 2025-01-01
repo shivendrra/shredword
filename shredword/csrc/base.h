@@ -10,7 +10,7 @@
 #define __BASE__H__
 
 #define  VOCAB_SIZE 256
-#define  MAX_LINE_LENGTH 1024
+#define  MAX_LINE_LENGTH 2048
 #define  MAX_SPECIAL_TOKENS 100
 #define  MAX_MERGES 10000
 

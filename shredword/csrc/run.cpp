@@ -60,7 +60,7 @@ int main() {
     printf("Tokenizer model loaded.\n");
   } else {
     printf("Training tokenizer...\n");
-    train(&tokenizer, train_text, 300, true);
+    train(&tokenizer, train_text, 300);
     printf("Training complete.\n");
 
     printf("Saving tokenizer model to %s...\n", model_file);
@@ -69,8 +69,6 @@ int main() {
   }
 
   // printing vocab & merges for debugging
-  print_merges(&tokenizer);
-  print_vocab(&tokenizer);
   char* merges_output = export_merges(&tokenizer);
   printf("%s", merges_output);
   free(merges_output);

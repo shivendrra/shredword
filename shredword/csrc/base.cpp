@@ -75,8 +75,11 @@ void get_stats(const int* ids, int ids_size, int stats[MAX_MERGES][3]) {
 
 int* merge(const int* ids, int ids_size, Pair pair, int idx, size_t* new_size) {
   int* new_ids = (int*)malloc(ids_size * sizeof(int));
+  if (!new_ids) {
+    fprintf(stderr, "Error: Memory allocation failed in merge().\n");
+    exit(EXIT_FAILURE);
+  }
   int new_idx = 0;
-
   for (int i = 0; i < ids_size; i++) {
     if (i < ids_size - 1 && ids[i] == pair.idx1 && ids[i + 1] == pair.idx2) {
       new_ids[new_idx++] = idx;  // merging the pair into a single token
@@ -85,7 +88,7 @@ int* merge(const int* ids, int ids_size, Pair pair, int idx, size_t* new_size) {
       new_ids[new_idx++] = ids[i];  // copy the token as is
     }
   }
-  *new_size = new_idx;  // updateing the size of the new array
+  *new_size = new_idx;  // updating the size of the new array
   new_ids = (int*)realloc(new_ids, new_idx * sizeof(int));  // resizing the array to fit the new size
   return new_ids;
 }
@@ -104,9 +107,11 @@ void save_tokenizer(const BaseTokenizer* tokenizer, const char* file_prefix) {
   }
   for (int i = 0; i < tokenizer->merge_count; i++) {
     Pair pair = tokenizer->merges[i].pair;
-    // skipping uninitialized merge entries
-    if (pair.idx1 == -1 && pair.idx2 == -1) continue;
-    fprintf(model_fp, "%d %d\n", pair.idx1, pair.idx2);
+    if (pair.idx1 >= 0 && pair.idx2 >= 0) { // only save valid pairs
+      fprintf(model_fp, "%d %d\n", pair.idx1, pair.idx2);
+    } else {
+      printf("Skipping invalid merge pair at index %d: (%d, %d)\n", i, pair.idx1, pair.idx2); // Debug log
+    }
   }
   fclose(model_fp);
   
