@@ -9,12 +9,12 @@ with open(input_file, "r", encoding="utf-8") as f:
 with open(train_file, "r", encoding="utf-8") as f:
   train = f.read()
 
-VOCAB_SIZE = 280
+VOCAB_SIZE = 260
 tokenizer.train(text, VOCAB_SIZE)
-print(tokenizer.export_merges())
-print(tokenizer.export_vocab())
-# tokenizer.save_model("vocab/tokenizer_model")
-# tokenizer.load_model("vocab/tokenizer_model.model")
+tokenizer.save_model("vocab")
+# tokenizer.load_model("vocab/vocab.model")
+# print(tokenizer.merges)
+# print(tokenizer.vocab)
 
 encoded = tokenizer.encode(train)
 print("Encoded:", encoded)

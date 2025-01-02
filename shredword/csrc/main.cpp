@@ -166,10 +166,18 @@ int* encode(Shred* tokenizer, const char* text, int* output_size) {
 }
 
 void save_model(const Shred* tokenizer, const char* file_path) {
+  if (!tokenizer || !file_path) {
+    fprintf(stderr, "Error: Invalid arguments passed to save_model.\n");
+    return;
+  }
   save_tokenizer(&(tokenizer->base), file_path);
 }
 
 void load_model(Shred* tokenizer, const char* model_file) {
+  if (!tokenizer || !model_file) {
+    fprintf(stderr, "Error: Invalid arguments passed to load_model.\n");
+    return;
+  }
   load_tokenizer(&(tokenizer->base), model_file);
 }
 
@@ -185,6 +193,10 @@ static void format_vocab(VocabEntry vocab, char* buffer) {
 
 // function to export vocabulary as a serialized string
 char* export_merges(const Shred* tokenizer) {
+  if (!tokenizer) {
+    fprintf(stderr, "Error: Invalid arguments passed export_vocab.\n");
+    return NULL;
+  }
   size_t buffer_size = MAX_MERGES * 32; // rough estimate for memory
   char* output = (char*)malloc(buffer_size);
   if (!output) {
@@ -208,6 +220,10 @@ char* export_merges(const Shred* tokenizer) {
 
 // function to export vocabulary as a serialized string
 char* export_vocab(const Shred* tokenizer) {
+  if (!tokenizer) {
+    fprintf(stderr, "Error: Invalid arguments passed export_vocab.\n");
+    return NULL;
+  }
   size_t buffer_size = (VOCAB_SIZE + MAX_MERGES) * 64;  // rough estimate for memory
   char* output = (char*)malloc(buffer_size);
   if (!output) {
@@ -224,6 +240,9 @@ char* export_vocab(const Shred* tokenizer) {
     strcat(output, vocab_str);
     strcat(output, "\n");
   }
-
   return output; // caller must free this memory
+}
+
+void free_string(char* string) {
+  free(string);
 }
