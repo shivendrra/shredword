@@ -1,38 +1,23 @@
-from shredword import shred
+from shredword import Shred
 
-with open("test data/captions.txt", "r", encoding="utf-8") as f:
-  data = f.read()
-  print("data imported")
-  f.close()
+tokenizer = Shred()
+input_file = "test data/captions.txt"
+train_file = "test data/new.txt"
 
-with open("test data/new.txt", "r", encoding="utf-8") as f:
-  test = f.read()
-  f.close()
+with open(input_file, "r", encoding="utf-8") as f:
+  text = f.read()
+with open(train_file, "r", encoding="utf-8") as f:
+  train = f.read()
 
-# training + save logic
-tokenizer = shred()
-tokenizer.train(data, 280, True)
-tokenizer.save("vocab/main_vocab")
-encoded = tokenizer.encode(test)
-print(encoded)
+VOCAB_SIZE = 280
+tokenizer.train(text, VOCAB_SIZE)
+print(tokenizer.export_merges())
+print(tokenizer.export_vocab())
+# tokenizer.save_model("vocab/tokenizer_model")
+# tokenizer.load_model("vocab/tokenizer_model.model")
+
+encoded = tokenizer.encode(train)
+print("Encoded:", encoded)
+
 decoded = tokenizer.decode(encoded)
-print(decoded)
-print(test == decoded)
-
-# ## loading & encoding/decoding logic
-# import timeit
-
-# tokenizer = shred()
-# tokenizer.load('vocab/main_vocab.model')
-
-# start_time = timeit.default_timer()
-# encoded = tokenizer.encode(data)
-# end_time = timeit.default_timer()
-# print(f"total characters: {len(data)}")
-# print(f"encoded length: {len(encoded)}")
-# print("compression ratio: ", (len(data) / len(encoded)))
-# print("encoding time taken: ", (end_time - start_time) / 60, "mins")
-# print(encoded[:200])
-# decoded = tokenizer.decode(encoded)
-# print(decoded[:200])
-# print(data == decoded)
+print("Decoded:", decoded)
