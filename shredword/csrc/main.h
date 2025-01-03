@@ -27,6 +27,8 @@ extern "C" {
   void load_model(Shred* tokenizer, const char* model_file);
   char* export_merges(const Shred* tokenizer);
   char* export_vocab(const Shred* tokenizer);
+  char* export_special_tokens(const Shred* tokenizer);
+  char* export_pattern(const Shred* tokenizer);
   void free_string(char* string);
 }
 

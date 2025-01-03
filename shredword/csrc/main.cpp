@@ -5,7 +5,7 @@
 #include "base.h"
 
 void init_shred(Shred* tokenizer) {
- init_tokenizer(&(tokenizer->base));
+  init_tokenizer(&(tokenizer->base));
 }
 
 void consistency_check(Shred* tokenizer, int n_merges) {
@@ -191,30 +191,36 @@ static void format_vocab(VocabEntry vocab, char* buffer) {
   sprintf(buffer, "%d %s", vocab.idx, vocab.value);
 }
 
-// function to export vocabulary as a serialized string
+// // function to export vocabulary as a serialized string
 char* export_merges(const Shred* tokenizer) {
   if (!tokenizer) {
-    fprintf(stderr, "Error: Invalid arguments passed export_vocab.\n");
+    printf("Error: tokenizer pointer is null.\n");
     return NULL;
   }
-  size_t buffer_size = MAX_MERGES * 32; // rough estimate for memory
+
+  size_t buffer_size = MAX_MERGES * 32; // rough estimate for output buffer memory
   char* output = (char*)malloc(buffer_size);
   if (!output) {
-    fprintf(stderr, "Error: Memory allocation failed for export_merges.\n");
-    exit(EXIT_FAILURE);
+    fprintf(stderr, "Error: Unable to allocate memory for output.\n");
+    return NULL;
   }
-  output[0] = '\0';
 
+  int offset = 0;
+  memset(output, 0, buffer_size);
   for (int i = 0; i < tokenizer->base.merge_count; i++) {
     Pair pair = tokenizer->base.merges[i].pair;
-    // skipping invalid or uninitialized merges
-    if (pair.idx1 < 0 || pair.idx2 < 0) {
-      continue;
+    int index = tokenizer->base.merges[i].idx;
+
+    if (pair.idx1 >= 0 && pair.idx2 >= 0) { // only include valid pairs
+      offset += snprintf(output + offset, buffer_size - offset, "(%d, %d) %d\n", pair.idx1, pair.idx2, index);
+      if (offset >= buffer_size) {
+        fprintf(stderr, "Error: Output buffer overflow.\n");
+        free(output);
+        return NULL;
+      }
     }
-    char merge_str[32];
-    sprintf(merge_str, "%d %d\n", pair.idx1, pair.idx2);
-    strcat(output, merge_str);
   }
+
   return output;
 }
 
@@ -241,6 +247,40 @@ char* export_vocab(const Shred* tokenizer) {
     strcat(output, "\n");
   }
   return output; // caller must free this memory
+}
+
+// function to export the regex pattern, if any, to the python code interface
+char* export_pattern(const Shred* tokenizer) {
+  if (!tokenizer) {
+    printf("Error: tokenizer pointer is null.\n");
+    return NULL;
+  }
+  return strdup(tokenizer->base.pattern); // return a copy of the pattern
+}
+
+// function to export the ``special_tokens`` if any, to the python code interface
+extern "C" char* export_special_tokens(const Shred* tokenizer) {
+  if (!tokenizer) {
+    printf("Error: tokenizer pointer is null.\n");
+    return NULL;
+  }
+  const int buffer_size = MAX_SPECIAL_TOKENS * MAX_LINE_LENGTH;
+  char* output = (char*)malloc(buffer_size);
+  if (!output) {
+    fprintf(stderr, "Error: Unable to allocate memory for output.\n");
+    return NULL;
+  }
+  int offset = 0;
+  for (int i = 0; i < tokenizer->base.special_token_count; i++) {
+    offset += snprintf(output + offset, buffer_size - offset, "%s %d\n", tokenizer->base.special_tokens[i], tokenizer->base.special_token_indices[i]);
+    if (offset >= buffer_size) {
+      fprintf(stderr, "Error: Output buffer overflow.\n");
+      free(output);
+      return NULL;
+    }
+  }
+
+  return output;
 }
 
 void free_string(char* string) {

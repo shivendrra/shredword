@@ -94,6 +94,15 @@ int* merge(const int* ids, int ids_size, Pair pair, int idx, size_t* new_size) {
 }
 
 void save_tokenizer(const BaseTokenizer* tokenizer, const char* file_prefix) {
+  if (!tokenizer) {
+    printf("Error: tokenizer pointer is null.\n");
+    return;
+  }
+  if (!file_prefix){
+    printf("Error: file_prefix pointer is null.\n");
+    return;
+  }
+  printf("Saving model to: %s\\n", file_prefix);
   char model_file[MAX_LINE_LENGTH];
   snprintf(model_file, MAX_LINE_LENGTH, "%s.model", file_prefix);
   FILE* model_fp = fopen(model_file, "w");
@@ -133,6 +142,15 @@ void save_tokenizer(const BaseTokenizer* tokenizer, const char* file_prefix) {
 }
 
 void load_tokenizer(BaseTokenizer* tokenizer, const char* model_file) {
+  if (!tokenizer) {
+    printf("Error: tokenizer pointer is null.\n");
+    return;
+  }
+  if (!model_file) {
+    printf("Error: model_file pointer is null.\n");
+    return;
+  }
+  printf("Loading vocab & model from: %s\\n", model_file);
   FILE* fp = fopen(model_file, "r");
   char line[MAX_LINE_LENGTH];
   fgets(line, MAX_LINE_LENGTH, fp); // version

@@ -11,10 +11,8 @@ with open(train_file, "r", encoding="utf-8") as f:
 
 VOCAB_SIZE = 260
 tokenizer.train(text, VOCAB_SIZE)
-tokenizer.save_model("vocab")
+tokenizer.save("vocab/trained_vocab")
 # tokenizer.load_model("vocab/vocab.model")
-# print(tokenizer.merges)
-# print(tokenizer.vocab)
 
 encoded = tokenizer.encode(train)
 print("Encoded:", encoded)
