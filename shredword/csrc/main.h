@@ -28,6 +28,8 @@ extern "C" {
   char* export_merges(const Shred* tokenizer);
   char* export_special_tokens(const Shred* tokenizer);
   char* export_pattern(const Shred* tokenizer);
+  void set_pattern(Shred* tokenizer, const char* new_pattern);
+  void set_special_tokens(Shred* tokenizer, const char* token_data);
   void free_string(char* string);
 }
 

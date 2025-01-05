@@ -88,6 +88,28 @@ lib.export_pattern.restype = ctypes.c_char_p
 lib.free_string.argtypes = [ctypes.c_char_p]
 lib.free_string.restype = None
 
+class TokenizerBase:
+  def __init__(self):
+    self.tokenizer = BaseTokenizer()
+    lib.init_tokenizer(ctypes.byref(self.tokenizer))
+
+  def build_vocab(self):
+    lib.build_vocab(ctypes.byref(self.tokenizer))
+
+  def replace_control_characters(self, input_str):
+    output = ctypes.create_string_buffer(MAX_LINE_LENGTH)
+    lib.replace_control_characters(input_str.encode("utf-8"), output)
+    return output.value.decode("utf-8")
+
+  def save_tokenizer(self, file_path):
+    lib.save_tokenizer(ctypes.byref(self.tokenizer), file_path.encode("utf-8"))
+
+  def load_tokenizer(self, file_path):
+    lib.load_tokenizer(ctypes.byref(self.tokenizer), file_path.encode("utf-8"))
+
+  def free(self):
+    lib.free_tokenizer(ctypes.byref(self.tokenizer))
+
 class Shred:
   def __init__(self):
     self._tokenizer = CShred()
@@ -121,6 +143,12 @@ class Shred:
     lib.load_model(ctypes.byref(self._tokenizer), file_path_c)
     print("Loaded the model sucessfully!!")
 
+  def _build_vocab(self):
+    vocab = {idx: bytes([idx]) for idx in range(256)}
+    for p0, p1, idx in self.merges:
+      vocab[idx] = vocab[p0] + vocab[p1]
+    return vocab
+
   @property
   def merges(self):
     merges = lib.export_merges(ctypes.byref(self._tokenizer))
@@ -140,12 +168,21 @@ class Shred:
     result = ctypes.string_at(pattern).decode("utf-8").strip()
     return result
 
+  @pattern.setter
+  def pattern(self, new_pattern):
+    lib.set_pattern(ctypes.byref(self.tokenizer), new_pattern.encode("utf-8"))
+
   @property
   def special_tokens(self):
     tokens = lib.export_special_tokens(ctypes.byref(self._tokenizer))
     if not tokens: return ["None"]
     result = ctypes.string_at(tokens).decode("utf-8").strip().splitlines()
     return result
+  
+  @special_tokens.setter
+  def special_tokens(self, token_list):
+    serialized = "\n".join(f"{token} {index}" for token, index in token_list)
+    lib.load_special_tokens(ctypes.byref(self.tokenizer), serialized.encode("utf-8"))
 
   # def __del__(self):
   #   lib.free_tokenizer(ctypes.byref(self._tokenizer))

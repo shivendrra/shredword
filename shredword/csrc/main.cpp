@@ -256,6 +256,46 @@ char* export_special_tokens(const Shred* tokenizer) {
   return output; // return serialized special tokens.
 }
 
+void set_pattern(Shred* tokenizer, const char* new_pattern) {
+  if (!tokenizer || !new_pattern) {
+    fprintf(stderr, "Error: Invalid arguments passed to set_pattern.\n");
+    return;
+  }
+  strncpy(tokenizer->base.pattern, new_pattern, MAX_LINE_LENGTH - 1);
+  tokenizer->base.pattern[MAX_LINE_LENGTH - 1] = '\0'; // ensure null termination
+  printf("Pattern updated successfully.\n");
+}
+
+void set_special_tokens(Shred* tokenizer, const char* token_data) {
+  if (!tokenizer || !token_data) {
+    fprintf(stderr, "Error: Invalid arguments passed to set_special_tokens.\n");
+    return;
+  }
+  
+  tokenizer->base.special_token_count = 0; // reset existing tokens
+
+  const char* line = token_data;
+  while (*line) {
+    char token[MAX_LINE_LENGTH];
+    int index;
+    int items_read = sscanf(line, "%s %d", token, &index);
+    if (items_read == 2 && tokenizer->base.special_token_count < MAX_SPECIAL_TOKENS) {
+      strncpy(tokenizer->base.special_tokens[tokenizer->base.special_token_count], token, MAX_LINE_LENGTH - 1);
+      tokenizer->base.special_tokens[tokenizer->base.special_token_count][MAX_LINE_LENGTH - 1] = '\0';
+      tokenizer->base.special_token_indices[tokenizer->base.special_token_count] = index;
+      tokenizer->base.special_token_count++;
+    } else if (items_read != 2) {
+      fprintf(stderr, "Error: Invalid token data format or too many tokens.\n");
+      break;
+    }
+    // move to the next line
+    line = strchr(line, '\n');
+    if (line) line++; // skip the newline character
+    else break;
+  }
+  printf("Special tokens updated successfully.\n");
+}
+
 void free_string(char* string) {
   free(string);
 }
