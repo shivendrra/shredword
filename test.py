@@ -12,7 +12,7 @@ with open(train_file, "r", encoding="utf-8") as f:
 VOCAB_SIZE = 260
 tokenizer.train(text, VOCAB_SIZE)
 tokenizer.save("vocab/trained_vocab")
-# tokenizer.load_model("vocab/vocab.model")
+tokenizer.load("vocab/trained_vocab.model")
 
 encoded = tokenizer.encode(train)
 print("Encoded:", encoded)
