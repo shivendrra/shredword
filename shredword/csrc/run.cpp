@@ -1,3 +1,10 @@
+/*
+  @run.cpp
+  - main run file for testing the bpe tokenization logic
+  - compile as: g++ -o run run.cpp main.cpp base.cpp tqdm.cpp
+    - run: ./run
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -31,7 +38,7 @@ int main() {
   // paths to input files
   const char* train_file = "captions.txt";
   const char* test_file = "new.txt";
-  const char* model_file = "tokenizer.model";
+  const char* model_file = "vocab";
 
   // reading training and test data
   printf("Reading training data from %s...\n", train_file);
@@ -53,13 +60,21 @@ int main() {
     printf("Tokenizer model loaded.\n");
   } else {
     printf("Training tokenizer...\n");
-    train(&tokenizer, train_text, 356, true);
+    train(&tokenizer, train_text, 300);
     printf("Training complete.\n");
 
     printf("Saving tokenizer model to %s...\n", model_file);
     save_model(&tokenizer, model_file);
     printf("Tokenizer model saved.\n");
   }
+
+  // printing vocab & merges for debugging
+  char* merges_output = export_merges(&tokenizer);
+  printf("%s", merges_output);
+  free(merges_output);
+  char* vocab_output = export_vocab(&tokenizer);
+  printf("%s", vocab_output);
+  free(vocab_output);
 
   // encoding test data
   printf("Encoding test data...\n");

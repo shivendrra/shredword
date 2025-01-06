@@ -20,11 +20,17 @@ typedef struct {
 
 extern "C" {
   void init_shred(Shred* tokenizer);
-  void train(Shred* tokenizer, const char* text, int vocab_size, bool verbose);
+  void train(Shred* tokenizer, const char* text, int vocab_size);
   char* decode(Shred* tokenizer, const int* ids, int ids_size);
   int* encode(Shred* tokenizer, const char* text, int* output_size);
   void save_model(const Shred* tokenizer, const char* file_path);
   void load_model(Shred* tokenizer, const char* model_file);
+  char* export_merges(const Shred* tokenizer);
+  char* export_special_tokens(const Shred* tokenizer);
+  char* export_pattern(const Shred* tokenizer);
+  void set_pattern(Shred* tokenizer, const char* new_pattern);
+  void set_special_tokens(Shred* tokenizer, const char* token_data);
+  void free_string(char* string);
 }
 
 #endif

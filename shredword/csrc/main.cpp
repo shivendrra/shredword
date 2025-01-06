@@ -5,14 +5,36 @@
 #include "base.h"
 
 void init_shred(Shred* tokenizer) {
- init_tokenizer(&(tokenizer->base));
+  init_tokenizer(&(tokenizer->base));
 }
 
-void train(Shred* tokenizer, const char* text, int vocab_size, bool verbose) {
+void consistency_check(Shred* tokenizer, int n_merges) {
+  // consistency check
+  // matches all the merged pairs with the verbose outputs pair by pair & logs the errors
+  printf("\nPerforming consistency check for merges...\n");
+  int mismatch_count = 0;
+  for (int i = 0; i < n_merges; i++) {
+    if (tokenizer->base.merges[i].pair.idx1 != tokenizer->base.merges[i].pair.idx1 ||
+      tokenizer->base.merges[i].pair.idx2 != tokenizer->base.merges[i].pair.idx2) {
+      printf("Mismatch at merge %d: Expected (%d, %d), Found (%d, %d)\n",
+             i + 1,
+             tokenizer->base.merges[i].pair.idx1, tokenizer->base.merges[i].pair.idx2,
+             tokenizer->base.merges[i].pair.idx1, tokenizer->base.merges[i].pair.idx2);
+      mismatch_count++;
+    }
+  }
+
+  if (mismatch_count == 0) {
+    printf("All merges are consistent between the training logic and tokenizer state.\n");
+  } else {
+    printf("Consistency check failed: %d mismatches found in the merges.\n", mismatch_count);
+  }
+}
+
+void train(Shred* tokenizer, const char* text, int vocab_size) {
   assert(vocab_size >= VOCAB_SIZE);
   int n_merges = vocab_size - VOCAB_SIZE;
   size_t text_len = strlen(text);
-
   unsigned char* text_bytes = (unsigned char*)malloc((text_len + 1) * sizeof(unsigned char));
   if (!text_bytes) {
     fprintf(stderr, "Error: Memory allocation for text_bytes failed.\n");
@@ -30,55 +52,59 @@ void train(Shred* tokenizer, const char* text, int vocab_size, bool verbose) {
   for (size_t i = 0; i < text_len; i++) {
     ids[i] = text_bytes[i];
   }
-  Pair merges[MAX_MERGES];
   VocabEntry vocab[VOCAB_SIZE + MAX_MERGES];
   memcpy(vocab, tokenizer->base.vocab, VOCAB_SIZE * sizeof(VocabEntry));
 
   for (int i = 0; i < n_merges; i++) {
-    
-    // debug statements ---------
-    printf("Starting merge iteration %d/%d...\n", i + 1, n_merges);
-    fflush(stdout); // force output to appear immediately
-    // ----------
-    
     int stats[MAX_MERGES][3];
+    memset(stats, 0, sizeof(stats));
     get_stats(ids, text_len, stats);
-    
+
     int max_occurrences = 0, max_ids = -1;
-    Pair max_pair;
-    for(int j = 0; j < MAX_MERGES && stats[j][2] > 0; j++) {
-      if(stats[j][2] > max_occurrences) {
+    Pair max_pair = {0, 0};
+    for (int j = 0; j < MAX_MERGES && stats[j][2] > 0; j++) {
+      if (stats[j][2] > max_occurrences) {
         max_occurrences = stats[j][2];
         max_pair.idx1 = stats[j][0];
         max_pair.idx2 = stats[j][1];
         max_ids = j;
       }
     }
-    if (max_ids == -1) {
-      break;    // no more merging pairs left
+    if (max_ids == -1 || max_occurrences == 0) {
+      printf("Stopping early at merge %d: No more pairs to merge.\n", i + 1);
+      break;
     }
+
     int new_idx = VOCAB_SIZE + i;
     ids = merge(ids, text_len, max_pair, new_idx, &text_len);
-    merges[i] = max_pair;
-    vocab[new_idx].idx = new_idx;
+
+    // directly updating tokenizer->base.merges unlike the previous implementation where i used a buffer variable
+    // & fucked up the whole loigc & took 3 weeks to fix it (peak skill issue)
+    tokenizer->base.merges[i].pair = max_pair;
+    tokenizer->base.merges[i].idx = new_idx;
 
     size_t len1 = strlen(vocab[max_pair.idx1].value);
     size_t len2 = strlen(vocab[max_pair.idx2].value);
     vocab[new_idx].value = (char*)malloc(len1 + len2 + 1);
-    strcpy(vocab[new_idx].value, vocab[max_pair.idx1].value);
-    strcpy(vocab[new_idx].value, vocab[max_pair.idx2].value);
-
-    if (verbose == true) {
-      printf("Merge %d/%d: (%d, %d) -> %d (%s) had %d occurrences\n",
-             i + 1, n_merges, max_pair.idx1, max_pair.idx2, new_idx,
-             vocab[new_idx].value, max_occurrences);
+    if (!vocab[new_idx].value) {
+      fprintf(stderr, "Error: Memory allocation for vocab[%d].value failed.\n", new_idx);
+      exit(EXIT_FAILURE);
     }
+    snprintf(vocab[new_idx].value, len1 + len2 + 1, "%s%s", vocab[max_pair.idx1].value, vocab[max_pair.idx2].value);
+    vocab[new_idx].idx = new_idx;
+
+    // verbose logging is not optional
+    printf("\tMerge %d/%d: (%d, %d) -> %d (%s) had %d occurrences\n", i + 1, n_merges, max_pair.idx1, max_pair.idx2, new_idx, vocab[new_idx].value, max_occurrences);
+    fflush(stdout);
   }
+  // removed tqdm, it was slowing the process down
+  // final updates
   tokenizer->base.merge_count = n_merges;
-  memcpy(tokenizer->base.merges, merges, n_merges * sizeof(Pair));
-  memcpy(tokenizer->base.vocab, vocab, (n_merges + VOCAB_SIZE) * sizeof(VocabEntry));
+  memcpy(tokenizer->base.vocab, vocab, (VOCAB_SIZE + n_merges) * sizeof(VocabEntry));
   free(text_bytes);
   free(ids);
+
+  consistency_check(tokenizer, n_merges);  // consistency check function calling
 }
 
 char* decode(Shred* tokenizer, const int* ids, int ids_size) {
@@ -88,11 +114,11 @@ char* decode(Shred* tokenizer, const int* ids, int ids_size) {
   }
   char* output = (char*)malloc(output_size + 1);
   if (!output) {
-  fprintf(stderr, "Error: Memory allocation for output failed.\n");
-  exit(EXIT_FAILURE);
+    fprintf(stderr, "Error: Memory allocation for output failed.\n");
+    exit(EXIT_FAILURE);
   }
   output[0] = '\0';
-  for(int i = 0; i < ids_size; i++) {
+  for (int i = 0; i < ids_size; i++) {
     strcat(output, tokenizer->base.vocab[ids[i]].value);
   }
   return output;
@@ -100,49 +126,176 @@ char* decode(Shred* tokenizer, const int* ids, int ids_size) {
 
 int* encode(Shred* tokenizer, const char* text, int* output_size) {
   size_t text_len = strlen(text);
-  unsigned char* text_bytes = (unsigned char*)malloc(text_len + 1);
-  memcpy(text_bytes, text, text_len);
-  text_bytes[text_len] = '\0';
 
   int* ids = (int*)malloc(text_len * sizeof(int));
   if (!ids) {
-  fprintf(stderr, "Error: Memory allocation for ids failed.\n");
-  exit(EXIT_FAILURE);
+    fprintf(stderr, "Error: Memory allocation for ids failed.\n");
+    exit(EXIT_FAILURE);
   }
-  for (int i = 0; i < text_len; i++) {
-    ids[i] = text_bytes[i];
+  for (size_t i = 0; i < text_len; i++) {
+    ids[i] = (unsigned char)text[i];
   }
+  size_t ids_len = text_len;
+  
+  for (int i = 0; i < tokenizer->base.merge_count; i++) {
+    MergeEntry merge = tokenizer->base.merges[i];
+    Pair max_pair = merge.pair;
 
-  while (text_len >= 2) {
-    int stats[MAX_MERGES][3];
-    get_stats(ids, text_len, stats);
-    
-    int min_merge_idx = -1;
-    Pair min_pair;
-    int min_value = INT_MAX;
-    for (int i = 0; i < MAX_MERGES && stats[i][2] > 0; i++) {
-      Pair pair = {stats[i][0], stats[i][1]};
-      int merge_idx = tokenizer->base.merges[i].idx;
-      if (merge_idx < min_value) {
-        min_value = merge_idx;
-        min_pair = pair;
-        min_merge_idx = merge_idx;
+    size_t new_ids_len = 0;
+    int* new_ids = (int*)malloc(ids_len * sizeof(int));
+    if (!new_ids) {
+      fprintf(stderr, "Error: Memory allocation for new_ids failed.\n");
+      free(ids);
+      exit(EXIT_FAILURE);
+    }
+
+    for (size_t j = 0; j < ids_len; j++) {
+      if (j < ids_len - 1 && ids[j] == max_pair.idx1 && ids[j + 1] == max_pair.idx2) {
+        new_ids[new_ids_len++] = VOCAB_SIZE + i;
+        j++;
+      } else {
+        new_ids[new_ids_len++] = ids[j];
       }
     }
-    if(min_merge_idx == -1) {
-      break;
-    }
-    ids = merge(ids, text_len, min_pair, min_merge_idx, &text_len);
+    free(ids);
+    ids = new_ids;
+    ids_len = new_ids_len;
   }
-  *output_size = text_len;
-  free(text_bytes);
+  *output_size = ids_len;
   return ids;
 }
 
 void save_model(const Shred* tokenizer, const char* file_path) {
+  if (!tokenizer || !file_path) {
+    fprintf(stderr, "Error: Invalid arguments passed to save_model.\n");
+    return;
+  }
   save_tokenizer(&(tokenizer->base), file_path);
 }
 
 void load_model(Shred* tokenizer, const char* model_file) {
+  if (!tokenizer || !model_file) {
+    fprintf(stderr, "Error: Invalid arguments passed to load_model.\n");
+    return;
+  }
   load_tokenizer(&(tokenizer->base), model_file);
+}
+
+// function to export vocabulary as a serialized string
+char* export_merges(const Shred* tokenizer) {
+  if (!tokenizer) {
+    printf("Error: tokenizer pointer is null.\n");
+    return NULL;
+  }
+
+  size_t buffer_size = MAX_MERGES * 32; // rough estimate for output buffer memory
+  char* output = (char*)malloc(buffer_size);
+  if (!output) {
+    fprintf(stderr, "Error: Unable to allocate memory for output.\n");
+    return NULL;
+  }
+
+  int offset = 0;
+  memset(output, 0, buffer_size);
+  for (int i = 0; i < tokenizer->base.merge_count; i++) {
+    Pair pair = tokenizer->base.merges[i].pair;
+    int index = tokenizer->base.merges[i].idx;
+
+    if (pair.idx1 >= 0 && pair.idx2 >= 0) { // only include valid pairs
+      offset += snprintf(output + offset, buffer_size - offset, "(%d, %d) %d\n", pair.idx1, pair.idx2, index);
+      if (offset >= buffer_size) {
+        fprintf(stderr, "Error: Output buffer overflow.\n");
+        free(output);
+        return NULL;
+      }
+    }
+  }
+
+  return output;
+}
+
+// function to export the regex pattern, if any, to the python code interface
+char* export_pattern(const Shred* tokenizer) {
+  if (!tokenizer) {
+    fprintf(stderr, "Error: Tokenizer pointer is null.\n");
+    return strdup(""); // return empty string to indicate no pattern
+  }
+  if (strlen(tokenizer->base.pattern) == 0) {
+    return strdup(""); // return empty string if no pattern exists
+  }
+  return strdup(tokenizer->base.pattern); // return a copy of the pattern
+}
+
+// function to export the ``special_tokens`` if any, to the python code interface
+char* export_special_tokens(const Shred* tokenizer) {
+  if (!tokenizer) {
+    fprintf(stderr, "Error: Tokenizer pointer is null.\n");
+    return strdup(""); // return empty string to indicate no special tokens.
+  }
+
+  if (tokenizer->base.special_token_count == 0) {
+    return strdup(""); // return empty string if no special tokens exist
+  }
+  const int buffer_size = MAX_SPECIAL_TOKENS * MAX_LINE_LENGTH;
+  char* output = (char*)malloc(buffer_size);
+  if (!output) {
+    fprintf(stderr, "Error: Memory allocation failed for output.\n");
+    return strdup(""); // return empty string in case of allocation failure
+  }
+
+  output[0] = '\0'; // initialize output as an empty string.
+  int offset = 0;
+  for (int i = 0; i < tokenizer->base.special_token_count; i++) {
+    offset += snprintf(output + offset, buffer_size - offset, "%s %d\n", tokenizer->base.special_tokens[i], tokenizer->base.special_token_indices[i]);
+    if (offset >= buffer_size) {
+      fprintf(stderr, "Error: Output buffer overflow.\n");
+      free(output);
+      return strdup(""); // return empty string in case of overflow.
+    }
+  }
+  return output; // return serialized special tokens.
+}
+
+void set_pattern(Shred* tokenizer, const char* new_pattern) {
+  if (!tokenizer || !new_pattern) {
+    fprintf(stderr, "Error: Invalid arguments passed to set_pattern.\n");
+    return;
+  }
+  strncpy(tokenizer->base.pattern, new_pattern, MAX_LINE_LENGTH - 1);
+  tokenizer->base.pattern[MAX_LINE_LENGTH - 1] = '\0'; // ensure null termination
+  printf("Pattern updated successfully.\n");
+}
+
+void set_special_tokens(Shred* tokenizer, const char* token_data) {
+  if (!tokenizer || !token_data) {
+    fprintf(stderr, "Error: Invalid arguments passed to set_special_tokens.\n");
+    return;
+  }
+  
+  tokenizer->base.special_token_count = 0; // reset existing tokens
+
+  const char* line = token_data;
+  while (*line) {
+    char token[MAX_LINE_LENGTH];
+    int index;
+    int items_read = sscanf(line, "%s %d", token, &index);
+    if (items_read == 2 && tokenizer->base.special_token_count < MAX_SPECIAL_TOKENS) {
+      strncpy(tokenizer->base.special_tokens[tokenizer->base.special_token_count], token, MAX_LINE_LENGTH - 1);
+      tokenizer->base.special_tokens[tokenizer->base.special_token_count][MAX_LINE_LENGTH - 1] = '\0';
+      tokenizer->base.special_token_indices[tokenizer->base.special_token_count] = index;
+      tokenizer->base.special_token_count++;
+    } else if (items_read != 2) {
+      fprintf(stderr, "Error: Invalid token data format or too many tokens.\n");
+      break;
+    }
+    // move to the next line
+    line = strchr(line, '\n');
+    if (line) line++; // skip the newline character
+    else break;
+  }
+  printf("Special tokens updated successfully.\n");
+}
+
+void free_string(char* string) {
+  free(string);
 }
