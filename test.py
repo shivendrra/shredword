@@ -9,7 +9,7 @@ with open(input_file, "r", encoding="utf-8") as f:
 with open(train_file, "r", encoding="utf-8") as f:
   train = f.read()
 
-VOCAB_SIZE = 260
+VOCAB_SIZE = 556
 tokenizer.train(text, VOCAB_SIZE)
 tokenizer.save("vocab/trained_vocab")
 tokenizer.load("vocab/trained_vocab.model")
