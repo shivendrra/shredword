@@ -38,7 +38,7 @@ char* read_file(const char* filename) {
 int main() {
   // paths to input files
   const char* train_file = "captions.txt";
-  const char* test_file = "training_data.txt";
+  const char* test_file = "new.txt";
   const char* model_file = "trained_vocab.model";
 
   // reading training and test data
@@ -69,25 +69,20 @@ int main() {
     printf("Tokenizer model saved.\n");
   }
 
-  // printing vocab & merges for debugging
-  char* merges_output = export_merges(&tokenizer);
-  printf("%s", merges_output);
-  free(merges_output);
-
   // encoding test data
   printf("Encoding test data...\n");
   int encoded_size;
   int* encoded_ids = encode(&tokenizer, test_text, &encoded_size);
   printf("Encoded IDs (%d tokens): ", encoded_size);
-  // for (int i = 0; i < encoded_size; i++) {
-  //   printf("%d ", encoded_ids[i]);
-  // }
-  // printf("\n\n");
+  for (int i = 0; i < encoded_size; i++) {
+    printf("%d ", encoded_ids[i]);
+  }
+  printf("\n\n");
 
   // decoding the encoded data
   printf("Decoding back to text...\n");
   char* decoded_text = decode(&tokenizer, encoded_ids, encoded_size);
-  // printf("Decoded text (%lu characters):\n%s\n\n", strlen(decoded_text), decoded_text);
+  printf("Decoded text (%lu characters):\n%s\n\n", strlen(decoded_text), decoded_text);
 
   // verify original and decoded texts
   if (strcmp(test_text, decoded_text) == 0) {

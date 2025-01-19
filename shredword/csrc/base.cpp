@@ -96,11 +96,11 @@ int* merge(const int* ids, int ids_size, Pair pair, int idx, size_t* new_size) {
 void save_tokenizer(const BaseTokenizer* tokenizer, const char* file_prefix) {
   if (!tokenizer) {
     printf("Error: tokenizer pointer is null.\n");
-    return;
+    exit(EXIT_FAILURE);
   }
   if (!file_prefix){
     printf("Error: file_prefix pointer is null.\n");
-    return;
+    exit(EXIT_FAILURE);
   }
   printf("Saving model to: %s\\n", file_prefix);
   char model_file[MAX_LINE_LENGTH];
@@ -108,7 +108,7 @@ void save_tokenizer(const BaseTokenizer* tokenizer, const char* file_prefix) {
   FILE* model_fp = fopen(model_file, "w");
   if (!model_fp) {
     fprintf(stderr, "Error: Unable to open file %s for writing.\n", model_file);
-    return;
+    exit(EXIT_FAILURE);
   }
   fprintf(model_fp, "bpe v1\n%s\n%d\n", tokenizer->pattern, tokenizer->special_token_count);
   for (int i = 0; i < tokenizer->special_token_count; i++) {
@@ -130,7 +130,7 @@ void save_tokenizer(const BaseTokenizer* tokenizer, const char* file_prefix) {
   FILE* vocab_fp = fopen(vocab_file, "w");
   if (!vocab_fp) {
     fprintf(stderr, "Error: Unable to open file %s for writing.\n", vocab_file);
-    return;
+    exit(EXIT_FAILURE);
   }
   for (int i = 0; i < tokenizer->vocab_size + tokenizer->merge_count + tokenizer->special_token_count; i++) {
     char rendered[MAX_LINE_LENGTH];
@@ -138,35 +138,71 @@ void save_tokenizer(const BaseTokenizer* tokenizer, const char* file_prefix) {
     fprintf(vocab_fp, "[%s] %d\n", rendered, tokenizer->vocab[i].idx);
   }
   fclose(vocab_fp);
-  printf("Tokenizer model saved successfully to %s.\n", file_prefix);
+  printf("Tokenizer model saved successfully to '%s'.\n", file_prefix);
 }
 
 void load_tokenizer(BaseTokenizer* tokenizer, const char* model_file) {
   if (!tokenizer) {
-    printf("Error: tokenizer pointer is null.\n");
-    return;
+    fprintf(stderr, "Error: tokenizer pointer is null.\n");
+    exit(EXIT_FAILURE);
   }
   if (!model_file) {
-    printf("Error: model_file pointer is null.\n");
-    return;
+    fprintf(stderr, "Error: model_file pointer is null.\n");
+    exit(EXIT_FAILURE);
   }
-  printf("Loading vocab & model from: %s\\n", model_file);
+  printf("Loading vocab & model from: '%s' \n", model_file);
   FILE* fp = fopen(model_file, "r");
+  if (!fp) {
+    fprintf(stderr, "Error: Could not open model file: %s\n", model_file);
+    exit(EXIT_FAILURE);
+  }
   char line[MAX_LINE_LENGTH];
   fgets(line, MAX_LINE_LENGTH, fp); // version
   fgets(tokenizer->pattern, MAX_LINE_LENGTH, fp); // pattern
 
   int num_special;
-  fscanf(fp, "%d\n", &num_special);
+  if (fscanf(fp, "%d\n", &num_special) != 1) {
+    fprintf(stderr, "Error: Failed to read the number of special tokens.\n");
+    fclose(fp);
+    exit(EXIT_FAILURE);
+  }
+
   tokenizer->special_token_count = num_special;
   for (int i = 0; i < num_special; i++) {
-    fscanf(fp, "%s %d\n", tokenizer->special_tokens[i], &tokenizer->special_token_indices[i]);
+    if (fscanf(fp, "%s %d\n", tokenizer->special_tokens[i], &tokenizer->special_token_indices[i]) != 2) {
+      fprintf(stderr, "Error: Failed to read special token %d.\n", i);
+      fclose(fp);
+      exit(EXIT_FAILURE);
+    }
   }
-  while (fscanf(fp, "%d %d\n", &tokenizer->merges[tokenizer->merge_count].pair.idx1,
-                &tokenizer->merges[tokenizer->merge_count].pair.idx2) == 2) {
+
+  int idx = VOCAB_SIZE; // starting assigning merge indices after the initial vocabulary
+  while (fscanf(fp, "%d %d\n", &tokenizer->merges[tokenizer->merge_count].pair.idx1, &tokenizer->merges[tokenizer->merge_count].pair.idx2) == 2) {
+    // assigning idx for each merge entry
+    tokenizer->merges[tokenizer->merge_count].idx = idx++;
     tokenizer->merge_count++;
   }
+  printf("Loaded saved merges successfully.\n");
   fclose(fp);
+
+  // rebuilding the vocab using loaded merges
+  for (int i = 0; i < tokenizer->merge_count; i++) {
+    int idx1 = tokenizer->merges[i].pair.idx1;
+    int idx2 = tokenizer->merges[i].pair.idx2;
+    int merge_idx = tokenizer->merges[i].idx;
+    
+    size_t len1 = strlen(tokenizer->vocab[idx1].value);
+    size_t len2 = strlen(tokenizer->vocab[idx2].value);
+    
+    tokenizer->vocab[merge_idx].value = (char*)malloc(len1 + len2 + 1);
+    if (!tokenizer->vocab[merge_idx].value) {
+      fprintf(stderr, "Error: Memory allocation failed for vocab[%d].value.\n", merge_idx);
+      exit(EXIT_FAILURE);
+    }
+    strcpy(tokenizer->vocab[merge_idx].value, tokenizer->vocab[idx1].value);
+    strcat(tokenizer->vocab[merge_idx].value, tokenizer->vocab[idx2].value);
+    tokenizer->vocab[merge_idx].idx = merge_idx;
+  }
 }
 
 void replace_control_characters(const char* input, char* output) {
