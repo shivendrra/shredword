@@ -1,13 +1,14 @@
 /*
   @run.cpp
   - main run file for testing the bpe tokenization logic
-  - compile as: g++ -o run run.cpp main.cpp base.cpp tqdm.cpp
+  - compile as: g++ -o run run.cpp main.cpp base.cpp
     - run: ./run
 */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <pthread.h>
 #include <string.h>
 #include "main.h"
 
@@ -37,8 +38,8 @@ char* read_file(const char* filename) {
 int main() {
   // paths to input files
   const char* train_file = "captions.txt";
-  const char* test_file = "new.txt";
-  const char* model_file = "vocab";
+  const char* test_file = "training_data.txt";
+  const char* model_file = "trained_vocab.model";
 
   // reading training and test data
   printf("Reading training data from %s...\n", train_file);
@@ -60,7 +61,7 @@ int main() {
     printf("Tokenizer model loaded.\n");
   } else {
     printf("Training tokenizer...\n");
-    train(&tokenizer, train_text, 300);
+    train(&tokenizer, train_text, 266);
     printf("Training complete.\n");
 
     printf("Saving tokenizer model to %s...\n", model_file);
@@ -72,24 +73,21 @@ int main() {
   char* merges_output = export_merges(&tokenizer);
   printf("%s", merges_output);
   free(merges_output);
-  char* vocab_output = export_vocab(&tokenizer);
-  printf("%s", vocab_output);
-  free(vocab_output);
 
   // encoding test data
   printf("Encoding test data...\n");
   int encoded_size;
   int* encoded_ids = encode(&tokenizer, test_text, &encoded_size);
   printf("Encoded IDs (%d tokens): ", encoded_size);
-  for (int i = 0; i < encoded_size; i++) {
-    printf("%d ", encoded_ids[i]);
-  }
-  printf("\n\n");
+  // for (int i = 0; i < encoded_size; i++) {
+  //   printf("%d ", encoded_ids[i]);
+  // }
+  // printf("\n\n");
 
   // decoding the encoded data
   printf("Decoding back to text...\n");
   char* decoded_text = decode(&tokenizer, encoded_ids, encoded_size);
-  printf("Decoded text (%lu characters):\n%s\n\n", strlen(decoded_text), decoded_text);
+  // printf("Decoded text (%lu characters):\n%s\n\n", strlen(decoded_text), decoded_text);
 
   // verify original and decoded texts
   if (strcmp(test_text, decoded_text) == 0) {

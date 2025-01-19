@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include "main.h"
 #include "base.h"
+#include "cache.h"
 
 void init_shred(Shred* tokenizer) {
   init_tokenizer(&(tokenizer->base));
@@ -108,25 +109,68 @@ void train(Shred* tokenizer, const char* text, int vocab_size) {
 }
 
 char* decode(Shred* tokenizer, const int* ids, int ids_size) {
-  size_t output_size = 0;
-  for (int i = 0; i < ids_size; i++) {
-    output_size += strlen(tokenizer->base.vocab[ids[i]].value);
+  if (!tokenizer || !ids || ids_size <= 0) {
+    fprintf(stderr, "Error: Invalid arguments to decode.\n");
+    return NULL;
   }
-  char* output = (char*)malloc(output_size + 1);
+
+  initialize_token_cache(tokenizer);
+
+  // dividing work among threads
+  pthread_t threads[MAX_THREADS];
+  ThreadArgs thread_args[MAX_THREADS];
+
+  int chunk_size = ids_size / MAX_THREADS;
+  for (int i = 0; i < MAX_THREADS; i++) {
+    thread_args[i].tokenizer = tokenizer;
+    thread_args[i].ids = ids;
+    thread_args[i].start = i * chunk_size;
+    thread_args[i].end = (i == MAX_THREADS - 1) ? ids_size : (i + 1) * chunk_size;
+    thread_args[i].output_str = NULL;
+    thread_args[i].output_int = NULL;
+    thread_args[i].output_size = (size_t*)malloc(sizeof(size_t));
+
+    if (pthread_create(&threads[i], NULL, decode_worker, &thread_args[i]) != 0) {
+      fprintf(stderr, "Error: Failed to create thread %d.\n", i);
+      exit(EXIT_FAILURE);
+    }
+  }
+
+  // waiting for threads to finish and calculate total size
+  size_t total_size = 0;
+  for (int i = 0; i < MAX_THREADS; i++) {
+    pthread_join(threads[i], NULL);
+    total_size += *thread_args[i].output_size;
+  }
+
+  // merging results
+  char* output = (char*)malloc(total_size + 1);
   if (!output) {
     fprintf(stderr, "Error: Memory allocation for output failed.\n");
     exit(EXIT_FAILURE);
   }
-  output[0] = '\0';
-  for (int i = 0; i < ids_size; i++) {
-    strcat(output, tokenizer->base.vocab[ids[i]].value);
+
+  char* current_pos = output;
+  for (int i = 0; i < MAX_THREADS; i++) {
+    memcpy(current_pos, thread_args[i].output_str, *thread_args[i].output_size);
+    current_pos += *thread_args[i].output_size;
+    free(thread_args[i].output_str);
+    free(thread_args[i].output_size);
   }
+  *current_pos = '\0';
+
   return output;
 }
 
 int* encode(Shred* tokenizer, const char* text, int* output_size) {
+  if (!tokenizer || !text || output_size == NULL) {
+    fprintf(stderr, "Error: Invalid arguments to encode.\n");
+    return NULL;
+  }
+
   size_t text_len = strlen(text);
 
+  // Initialize IDs with input character values
   int* ids = (int*)malloc(text_len * sizeof(int));
   if (!ids) {
     fprintf(stderr, "Error: Memory allocation for ids failed.\n");
@@ -135,34 +179,52 @@ int* encode(Shred* tokenizer, const char* text, int* output_size) {
   for (size_t i = 0; i < text_len; i++) {
     ids[i] = (unsigned char)text[i];
   }
-  size_t ids_len = text_len;
-  
-  for (int i = 0; i < tokenizer->base.merge_count; i++) {
-    MergeEntry merge = tokenizer->base.merges[i];
-    Pair max_pair = merge.pair;
 
-    size_t new_ids_len = 0;
-    int* new_ids = (int*)malloc(ids_len * sizeof(int));
-    if (!new_ids) {
-      fprintf(stderr, "Error: Memory allocation for new_ids failed.\n");
-      free(ids);
+  // Divide the input into chunks for parallel processing
+  pthread_t threads[MAX_THREADS];
+  ThreadArgs thread_args[MAX_THREADS];
+
+  int chunk_size = text_len / MAX_THREADS;
+  for (int i = 0; i < MAX_THREADS; i++) {
+    thread_args[i].tokenizer = tokenizer;
+    thread_args[i].ids = ids;
+    thread_args[i].start = i * chunk_size;
+    thread_args[i].end = (i == MAX_THREADS - 1) ? text_len : (i + 1) * chunk_size;
+    thread_args[i].output_int = NULL;
+    thread_args[i].output_str = NULL;
+    thread_args[i].output_size = (size_t*)malloc(sizeof(size_t));
+
+    if (pthread_create(&threads[i], NULL, encode_worker, &thread_args[i]) != 0) {
+      fprintf(stderr, "Error: Failed to create thread %d.\n", i);
       exit(EXIT_FAILURE);
     }
-
-    for (size_t j = 0; j < ids_len; j++) {
-      if (j < ids_len - 1 && ids[j] == max_pair.idx1 && ids[j + 1] == max_pair.idx2) {
-        new_ids[new_ids_len++] = VOCAB_SIZE + i;
-        j++;
-      } else {
-        new_ids[new_ids_len++] = ids[j];
-      }
-    }
-    free(ids);
-    ids = new_ids;
-    ids_len = new_ids_len;
   }
-  *output_size = ids_len;
-  return ids;
+
+  // Wait for threads to finish and calculate total size
+  size_t total_size = 0;
+  for (int i = 0; i < MAX_THREADS; i++) {
+    pthread_join(threads[i], NULL);
+    total_size += *thread_args[i].output_size;
+  }
+
+  // Merge results
+  int* output = (int*)malloc(total_size * sizeof(int));
+  if (!output) {
+    fprintf(stderr, "Error: Memory allocation for output failed.\n");
+    exit(EXIT_FAILURE);
+  }
+
+  size_t offset = 0;
+  for (int i = 0; i < MAX_THREADS; i++) {
+    memcpy(output + offset, thread_args[i].output_int, *thread_args[i].output_size * sizeof(int));
+    offset += *thread_args[i].output_size;
+    free(thread_args[i].output_int);
+    free(thread_args[i].output_size);
+  }
+
+  free(ids);
+  *output_size = total_size;
+  return output;
 }
 
 void save_model(const Shred* tokenizer, const char* file_path) {
