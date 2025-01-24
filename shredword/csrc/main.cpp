@@ -109,7 +109,7 @@ void train(Shred* tokenizer, const char* text, int vocab_size) {
 }
 
 void train_with_lru_cache(Shred* tokenizer, const char* text, int vocab_size) {
-    if (!tokenizer) {
+  if (!tokenizer) {
     fprintf(stderr, "Error: Invalid memory location provided.\n");
     exit(EXIT_FAILURE);
   }
@@ -127,7 +127,7 @@ void train_with_lru_cache(Shred* tokenizer, const char* text, int vocab_size) {
   }
 
   // initializing LRU cache
-  LRUCache* cache = init_cache(CACHE_SIZE);
+  LRUCache* cache = init_cache(INITIAL_CACHE_SIZE);
 
   for (int merge_step = 0; merge_step < n_merges; merge_step++) {
     printf("Processing merge step %d/%d...\n", merge_step + 1, n_merges);

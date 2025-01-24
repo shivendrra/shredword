@@ -61,7 +61,8 @@ int main() {
     printf("Tokenizer model loaded.\n");
   } else {
     printf("Training tokenizer...\n");
-    train_with_lru_cache(&tokenizer, train_text, 280);
+    train_with_lru_cache(&tokenizer, train_text, 266);
+    // train(&tokenizer, train_text, 266);
     printf("Training complete.\n");
 
     printf("Saving tokenizer model to %s...\n", model_file);

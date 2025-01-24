@@ -1,11 +1,12 @@
 /*
   cache.h
-  * uses Static Precomputation caching technique (not LRU yet)
+  * uses Static Precomputation caching technique
   * caching implementation in a file for the encoding/decoding functions in ``main.cpp``
   * also uses ThreadPools to execute parallel computation
-  * it still has showed a significant speed boost in both:
-    - encoding(x18-19 times)
-    - decoding(x40 times)
+  
+  * implemented LRU caching for training the merges & vocabs
+    - has some memory related issues & bugs
+    - crashes after some iters
 */
 
 #ifndef __CACHE__H__
@@ -16,7 +17,7 @@
 #include "main.h"
 
 #define MAX_THREADS 6
-#define CACHE_SIZE 51200  // max size of LRU cache
+#define INITIAL_CACHE_SIZE 1024  // max size of LRU cache
 static size_t token_length_cache[VOCAB_SIZE + MAX_MERGES];
 
 typedef struct {
@@ -40,7 +41,7 @@ typedef struct {
   CacheNode* head;  // head of body of doubly linked list
   CacheNode* tail;  // tail of body of doubly linked list
   int size, capacity; // current size, & max capacity
-  CacheNode* table[CACHE_SIZE]; // simple hash table for O(1) lookups
+  CacheNode** table; // dynamically allocated hash table
 } LRUCache;
 
 extern "C" {
@@ -49,6 +50,7 @@ extern "C" {
   void* encode_worker(void* args);
   unsigned int hash(const char* key);
   LRUCache* init_cache(int capacity);
+  void resize_cache(LRUCache* cache);
   void remove_node(LRUCache* cache, CacheNode* node);
   void add_to_front(LRUCache* cache, CacheNode* node);
   int get_from_cache(LRUCache* cache, const char* key);

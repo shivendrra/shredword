@@ -96,16 +96,52 @@ unsigned int hash(const char* key) {
   while (*key) {
     hash = (hash * 31) + *key++;
   }
-  return hash % CACHE_SIZE;
+  return hash % INITIAL_CACHE_SIZE;
 }
 
-LRUCache* init_cache(int capacity) {
+LRUCache* init_cache(int initial_capacity) {
   LRUCache* cache = (LRUCache*)malloc(sizeof(LRUCache));
-  cache->head = cache->tail = NULL;
+  if (!cache) {
+    fprintf(stderr, "Error: Memory allocation for LRUCache failed.\n");
+    exit(EXIT_FAILURE);
+  }
+
+  cache->head = NULL;
+  cache->tail = NULL;
   cache->size = 0;
-  cache->capacity = capacity;
-  memset(cache->table, 0, sizeof(cache->table));
+  cache->capacity = initial_capacity;
+  cache->table = (CacheNode**)calloc(initial_capacity, sizeof(CacheNode*));
+  if (!cache->table) {
+    fprintf(stderr, "Error: Memory allocation for LRUCache table failed.\n");
+    free(cache);
+    exit(EXIT_FAILURE);
+  }
   return cache;
+}
+
+void resize_cache(LRUCache* cache) {
+  int new_capacity = cache->capacity * 2;
+  CacheNode** new_table = (CacheNode**)calloc(new_capacity, sizeof(CacheNode*));
+  if (!new_table) {
+    fprintf(stderr, "Error: Memory allocation for resizing LRUCache table failed.\n");
+    exit(EXIT_FAILURE);
+  }
+
+  // rehashing existing entries into the new table
+  for (int i = 0; i < cache->capacity; i++) {
+    CacheNode* node = cache->table[i];
+    while (node) {
+      unsigned int new_index = hash(node->key) % new_capacity;
+      CacheNode* next = node->next;
+      node->next = new_table[new_index];
+      new_table[new_index] = node;
+      node = next;
+    }
+  }
+
+  free(cache->table);
+  cache->table = new_table;
+  cache->capacity = new_capacity;
 }
 
 void remove_node(LRUCache* cache, CacheNode* node) {
@@ -133,6 +169,33 @@ void add_to_front(LRUCache* cache, CacheNode* node) {
   }
 }
 
+void put_in_cache(LRUCache* cache, const char* key, int value) {
+  if (get_from_cache(cache, key) != -1) return;
+  if (cache->size >= cache->capacity) {
+    resize_cache(cache);  // resizing the cache when needed
+  }
+  CacheNode* node = (CacheNode*)malloc(sizeof(CacheNode));
+  if (!node) {
+    fprintf(stderr, "Error: Memory allocation failed for new cache node.\n");
+    exit(EXIT_FAILURE);
+  }
+  node->key = strdup(key);
+  node->value = value;
+  node->prev = NULL;
+  node->next = NULL;
+
+  unsigned int index = hash(key) % cache->capacity;
+  node->next = cache->table[index];
+  if (cache->table[index]) {
+    cache->table[index]->prev = node;
+  }
+  cache->table[index] = node;
+
+  // add to the front of the doubly linked list
+  add_to_front(cache, node);
+  cache->size++;
+}
+
 int get_from_cache(LRUCache* cache, const char* key) {
   unsigned int idx = hash(key);
   CacheNode* node = cache->table[idx];
@@ -148,49 +211,6 @@ int get_from_cache(LRUCache* cache, const char* key) {
   return -1; // not found
 }
 
-void put_in_cache(LRUCache* cache, const char* key, int value) {
-  unsigned int idx = hash(key);
-  CacheNode* node = cache->table[idx];
-  while (node) {
-    if (strcmp(node->key, key) == 0) {
-      // update the value and move to the front
-      node->value = value;
-      remove_node(cache, node);
-      add_to_front(cache, node);
-      return;
-    }
-    node = node->next;
-  }
-  // not found, create a new node
-  node = (CacheNode*)malloc(sizeof(CacheNode));
-  node->key = strdup(key);
-  node->value = value;
-  node->prev = node->next = NULL;
-
-  // add to the hash table and linked list
-  node->next = cache->table[idx];
-  cache->table[idx] = node;
-  add_to_front(cache, node);
-
-  // evict if the cache is full
-  if (cache->size == cache->capacity) {
-    CacheNode* evicted = cache->tail;
-    remove_node(cache, evicted);
-    unsigned int evict_idx = hash(evicted->key);
-    CacheNode** ptr = &cache->table[evict_idx];
-    while (*ptr && *ptr != evicted) {
-      ptr = &(*ptr)->next;
-    }
-    if (*ptr) {
-      *ptr = evicted->next;
-    }
-    free(evicted->key);
-    free(evicted);
-  } else {
-    cache->size++;
-  }
-}
-
 void free_cache(LRUCache* cache) {
   if (!cache) return;
 
@@ -202,6 +222,6 @@ void free_cache(LRUCache* cache) {
     free(current);       // freeing the node itself
     current = next;
   }
-  // free(cache->table);
+  free(cache->table);
   free(cache);
 }
