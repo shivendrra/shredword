@@ -108,6 +108,89 @@ void train(Shred* tokenizer, const char* text, int vocab_size) {
   consistency_check(tokenizer, n_merges);  // consistency check function calling
 }
 
+void train_with_lru_cache(Shred* tokenizer, const char* text, int vocab_size) {
+    if (!tokenizer) {
+    fprintf(stderr, "Error: Invalid memory location provided.\n");
+    exit(EXIT_FAILURE);
+  }
+  assert(vocab_size >= VOCAB_SIZE);
+  int n_merges = vocab_size - VOCAB_SIZE;
+  size_t text_len = strlen(text);
+
+  int* ids = (int*)malloc(text_len * sizeof(int));
+  if (!ids) {
+    fprintf(stderr, "Memory allocation failed!\n");
+    exit(EXIT_FAILURE);
+  }
+  for (size_t i = 0; i < text_len; i++) {
+    ids[i] = (unsigned char)text[i];
+  }
+
+  // initializing LRU cache
+  LRUCache* cache = init_cache(CACHE_SIZE);
+
+  for (int merge_step = 0; merge_step < n_merges; merge_step++) {
+    printf("Processing merge step %d/%d...\n", merge_step + 1, n_merges);
+    int stats[MAX_MERGES][3] = {0};
+
+    for (size_t i = 0; i < text_len - 1; i++) {
+      char key[32];
+      snprintf(key, sizeof(key), "%d,%d", ids[i], ids[i + 1]);
+
+      int cached_count = get_from_cache(cache, key);
+      if (cached_count != -1) {
+        stats[i][0] = ids[i];
+        stats[i][1] = ids[i + 1];
+        stats[i][2] = cached_count;
+        continue;
+      }
+
+      int count = 0;
+      for (size_t j = 0; j < text_len - 1; j++) {
+        if (ids[j] == ids[i] && ids[j + 1] == ids[i + 1]) {
+          count++;
+        }
+      }
+      stats[i][0] = ids[i];
+      stats[i][1] = ids[i + 1];
+      stats[i][2] = count;
+      put_in_cache(cache, key, count);
+    }
+    int max_occurrences = 0, max_ids = -1;
+    Pair max_pair = {0, 0};
+    for (int j = 0; j < MAX_MERGES && stats[j][2] > 0; j++) {
+      if (stats[j][2] > max_occurrences) {
+        max_occurrences = stats[j][2];
+        max_pair.idx1 = stats[j][0];
+        max_pair.idx2 = stats[j][1];
+        max_ids = j;
+      }
+    }
+    if (max_occurrences == 0) {
+      printf("Stopping early at merge step %d: No more pairs to merge.\n", merge_step + 1);
+      break;
+    }
+    int new_idx = VOCAB_SIZE + merge_step;
+    size_t new_text_len = 0;
+    int* new_ids = merge(ids, text_len, max_pair, new_idx, &new_text_len);
+    free(ids);
+    ids = new_ids;
+    text_len = new_text_len;
+
+    // updating tokenizer state
+    tokenizer->base.merges[merge_step].pair = max_pair;
+    tokenizer->base.merges[merge_step].idx = new_idx;
+
+    // logging merge
+    printf("Merge %d/%d: (%d, %d) -> %d occurred %d times\n", merge_step + 1, n_merges, max_pair.idx1, max_pair.idx2, new_idx, max_occurrences);
+  }
+
+  free(ids);
+  free_cache(cache); // cleaning up cache
+  printf("Training with LRU cache optimization completed.\n");
+  consistency_check(tokenizer, n_merges);  // consistency check function calling
+}
+
 char* decode(Shred* tokenizer, const int* ids, int ids_size) {
   if (!tokenizer || !ids || ids_size <= 0) {
     fprintf(stderr, "Error: Invalid arguments to decode.\n");
