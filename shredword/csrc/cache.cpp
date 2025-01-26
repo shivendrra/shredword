@@ -119,8 +119,8 @@ LRUCache* init_cache(int initial_capacity) {
   return cache;
 }
 
-void resize_cache(LRUCache* cache) {
-  int new_capacity = cache->capacity * 2;
+void resize_cache(LRUCache* cache, int new_cap) {
+  int new_capacity = new_cap;
   CacheNode** new_table = (CacheNode**)calloc(new_capacity, sizeof(CacheNode*));
   if (!new_table) {
     fprintf(stderr, "Error: Memory allocation for resizing LRUCache table failed.\n");
@@ -170,30 +170,44 @@ void add_to_front(LRUCache* cache, CacheNode* node) {
 }
 
 void put_in_cache(LRUCache* cache, const char* key, int value) {
-  if (get_from_cache(cache, key) != -1) return;
-  if (cache->size >= cache->capacity) {
-    resize_cache(cache);  // resizing the cache when needed
+  unsigned int hash_index = hash(key);
+  CacheNode* existing = cache->table[hash_index];
+
+  while (existing) {
+    if (strcmp(existing->key, key) == 0) {
+      existing->value = value;
+      add_to_front(cache, existing);
+      return;
+    }
+    existing = existing->next;
   }
-  CacheNode* node = (CacheNode*)malloc(sizeof(CacheNode));
-  if (!node) {
-    fprintf(stderr, "Error: Memory allocation failed for new cache node.\n");
+
+  CacheNode* new_node = (CacheNode*)malloc(sizeof(CacheNode));
+  if (!new_node) {
+    fprintf(stderr, "Error: Memory allocation for cache node failed.\n");
     exit(EXIT_FAILURE);
   }
-  node->key = strdup(key);
-  node->value = value;
-  node->prev = NULL;
-  node->next = NULL;
 
-  unsigned int index = hash(key) % cache->capacity;
-  node->next = cache->table[index];
-  if (cache->table[index]) {
-    cache->table[index]->prev = node;
+  new_node->key = strdup(key);
+  new_node->value = value;
+  new_node->prev = NULL;
+  new_node->next = cache->head;
+
+  if (cache->head) {
+    cache->head->prev = new_node;
   }
-  cache->table[index] = node;
+  cache->head = new_node;
 
-  // add to the front of the doubly linked list
-  add_to_front(cache, node);
+  if (!cache->tail) {
+    cache->tail = new_node;
+  }
+
+  cache->table[hash_index] = new_node;
   cache->size++;
+
+  if (cache->size > cache->capacity) {
+    resize_cache(cache, cache->capacity * 2);
+  }
 }
 
 int get_from_cache(LRUCache* cache, const char* key) {
