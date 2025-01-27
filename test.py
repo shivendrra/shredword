@@ -1,4 +1,4 @@
-from shredword import Shred
+from src import Shred
 
 tokenizer = Shred()
 # input_file = "test data/training_data.txt"
