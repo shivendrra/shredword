@@ -44,17 +44,23 @@ typedef struct {
   CacheNode** table; // dynamically allocated hash table
 } LRUCache;
 
+typedef struct {
+  const Shred* base;
+  LRUCache* cache;
+} CachedShred;
+
 extern "C" {
   void initialize_token_cache(const Shred* tokenizer);
   void* decode_worker(void* args);
   void* encode_worker(void* args);
+
   unsigned int hash(const char* key);
   LRUCache* init_cache(int capacity);
-  void resize_cache(LRUCache* cache);
+  void resize_cache(LRUCache* cache, int new_cap);
   void remove_node(LRUCache* cache, CacheNode* node);
   void add_to_front(LRUCache* cache, CacheNode* node);
-  int get_from_cache(LRUCache* cache, const char* key);
-  void put_in_cache(LRUCache* cache, const char* key, int value);
+  int get(LRUCache* cache, const char* key);
+  void put(LRUCache* cache, const char* key, int value);
   void free_cache(LRUCache* cache);
 }
 

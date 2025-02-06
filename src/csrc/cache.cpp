@@ -169,7 +169,7 @@ void add_to_front(LRUCache* cache, CacheNode* node) {
   }
 }
 
-void put_in_cache(LRUCache* cache, const char* key, int value) {
+void put(LRUCache* cache, const char* key, int value) {
   unsigned int hash_index = hash(key);
   CacheNode* existing = cache->table[hash_index];
 
@@ -210,7 +210,7 @@ void put_in_cache(LRUCache* cache, const char* key, int value) {
   }
 }
 
-int get_from_cache(LRUCache* cache, const char* key) {
+int get(LRUCache* cache, const char* key) {
   unsigned int idx = hash(key);
   CacheNode* node = cache->table[idx];
   while (node) {

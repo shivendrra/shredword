@@ -133,26 +133,32 @@ void train_with_lru_cache(Shred* tokenizer, const char* text, int vocab_size) {
 
   for (int merge_step = 0; merge_step < n_merges; merge_step++) {
     printf("Processing merge step %d/%d...\n", merge_step + 1, n_merges);
-    int stats[MAX_MERGES][3];
-    memset(stats, 0, sizeof(stats));
+
+    int stats[MAX_MERGES][3] = {0};
+
+    // Compute statistics using get_stats()
     get_stats(ids, text_len, stats);
 
-    // Compute statistics manually
     for (int i = 0; i < MAX_MERGES && stats[i][2] > 0; i++) {
       char key[32];
       snprintf(key, sizeof(key), "%d,%d", stats[i][0], stats[i][1]);
-      put_in_cache(cache, key, stats[i][2]);
-      if (cache->size > cache->capacity) {
-        remove_node(cache, cache->tail);
+
+      if (get(cache, key) == -1) {
+        put(cache, key, stats[i][2]);
+        if (cache->size > cache->capacity) {
+          remove_node(cache, cache->tail);
+        }
       }
     }
+
+    // Find the most frequent pair
     int max_occurrences = 0;
     Pair max_pair = {0, 0};
-    for (int j = 0; j < MAX_MERGES && stats[j][2] > 0; j++) {
-      if (stats[j][2] > max_occurrences) {
-        max_occurrences = stats[j][2];
-        max_pair.idx1 = stats[j][0];
-        max_pair.idx2 = stats[j][1];
+    for (int i = 0; i < MAX_MERGES && stats[i][2] > 0; i++) {
+      if (stats[i][2] > max_occurrences) {
+        max_occurrences = stats[i][2];
+        max_pair.idx1 = stats[i][0];
+        max_pair.idx2 = stats[i][1];
       }
     }
 
