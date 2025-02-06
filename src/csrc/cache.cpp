@@ -99,62 +99,29 @@ unsigned int hash(const char* key) {
   return hash % INITIAL_CACHE_SIZE;
 }
 
-LRUCache* init_cache(int initial_capacity) {
+LRUCache* init_cache(int capacity) {
   LRUCache* cache = (LRUCache*)malloc(sizeof(LRUCache));
   if (!cache) {
-    fprintf(stderr, "Error: Memory allocation for LRUCache failed.\n");
+    fprintf(stderr, "Error: Memory allocation failed for LRUCache.\n");
     exit(EXIT_FAILURE);
   }
-
-  cache->head = NULL;
-  cache->tail = NULL;
+  cache->capacity = capacity;
   cache->size = 0;
-  cache->capacity = initial_capacity;
-  cache->table = (CacheNode**)calloc(initial_capacity, sizeof(CacheNode*));
-  if (!cache->table) {
-    fprintf(stderr, "Error: Memory allocation for LRUCache table failed.\n");
-    free(cache);
-    exit(EXIT_FAILURE);
-  }
+  cache->head = cache->tail = NULL;
+  cache->table = (CacheNode**)calloc(capacity, sizeof(CacheNode*));
   return cache;
 }
 
 void resize_cache(LRUCache* cache, int new_cap) {
-  int new_capacity = new_cap;
-  CacheNode** new_table = (CacheNode**)calloc(new_capacity, sizeof(CacheNode*));
+  CacheNode** new_table = (CacheNode**)calloc(new_cap, sizeof(CacheNode*));
   if (!new_table) {
-    fprintf(stderr, "Error: Memory allocation for resizing LRUCache table failed.\n");
-    exit(EXIT_FAILURE);
+    fprintf(stderr, "Error: Memory allocation failed for resized cache.\n");
+    return;
   }
-
-  // rehashing existing entries into the new table
-  for (int i = 0; i < cache->capacity; i++) {
-    CacheNode* node = cache->table[i];
-    while (node) {
-      unsigned int new_index = hash(node->key) % new_capacity;
-      CacheNode* next = node->next;
-      node->next = new_table[new_index];
-      new_table[new_index] = node;
-      node = next;
-    }
-  }
-
+  memcpy(new_table, cache->table, cache->capacity * sizeof(CacheNode*));
   free(cache->table);
   cache->table = new_table;
-  cache->capacity = new_capacity;
-}
-
-void remove_node(LRUCache* cache, CacheNode* node) {
-  if (node->prev) {
-    node->prev->next = node->next;
-  } else {
-    cache->head = node->next;
-  }
-  if (node->next) {
-    node->next->prev = node->prev;
-  } else {
-    cache->tail = node->prev;
-  }
+  cache->capacity = new_cap;
 }
 
 void add_to_front(LRUCache* cache, CacheNode* node) {
@@ -168,73 +135,60 @@ void add_to_front(LRUCache* cache, CacheNode* node) {
     cache->tail = node;
   }
 }
-
-void put(LRUCache* cache, const char* key, int value) {
-  unsigned int hash_index = hash(key);
-  CacheNode* existing = cache->table[hash_index];
-
-  while (existing) {
-    if (strcmp(existing->key, key) == 0) {
-      existing->value = value;
-      add_to_front(cache, existing);
-      return;
-    }
-    existing = existing->next;
+void remove_node(LRUCache* cache, CacheNode* node) {
+  if (node->prev) {
+    node->prev->next = node->next;
+  } else {
+    cache->head = node->next;
   }
-
-  CacheNode* new_node = (CacheNode*)malloc(sizeof(CacheNode));
-  if (!new_node) {
-    fprintf(stderr, "Error: Memory allocation for cache node failed.\n");
-    exit(EXIT_FAILURE);
+  if (node->next) {
+    node->next->prev = node->prev;
+  } else {
+    cache->tail = node->prev;
   }
-
-  new_node->key = strdup(key);
-  new_node->value = value;
-  new_node->prev = NULL;
-  new_node->next = cache->head;
-
-  if (cache->head) {
-    cache->head->prev = new_node;
-  }
-  cache->head = new_node;
-
-  if (!cache->tail) {
-    cache->tail = new_node;
-  }
-
-  cache->table[hash_index] = new_node;
-  cache->size++;
-
-  if (cache->size > cache->capacity) {
-    resize_cache(cache, cache->capacity * 2);
-  }
+  free(node->key);
+  free(node);
+  cache->size--;
 }
 
 int get(LRUCache* cache, const char* key) {
-  unsigned int idx = hash(key);
-  CacheNode* node = cache->table[idx];
+  unsigned int index = hash(key) % cache->capacity;
+  CacheNode* node = cache->table[index];
   while (node) {
     if (strcmp(node->key, key) == 0) {
-      // move the accessed node to the front
-      remove_node(cache, node);
-      add_to_front(cache, node);
       return node->value;
     }
     node = node->next;
   }
-  return -1; // not found
+  return -1; // Not found
+}
+
+void put(LRUCache* cache, const char* key, int value) {
+  unsigned int index = hash(key) % cache->capacity;
+  CacheNode* node = (CacheNode*)malloc(sizeof(CacheNode));
+  node->key = strdup(key);
+  node->value = value;
+  node->prev = NULL;
+  node->next = cache->table[index];
+  if (cache->table[index]) {
+    cache->table[index]->prev = node;
+  }
+  cache->table[index] = node;
+  cache->size++;
+
+  if (cache->size > cache->capacity) {
+    remove_node(cache, cache->tail);
+    resize_cache(cache, cache->capacity * 2);
+  }
 }
 
 void free_cache(LRUCache* cache) {
-  if (!cache) return;
-
-  // free the doubly linked list nodes
-  CacheNode* current = cache->head;
-  while (current) {
-    CacheNode* next = current->next;
-    free(current->key);  // freeing the dynamically allocated key
-    free(current);       // freeing the node itself
-    current = next;
+  CacheNode* node = cache->head;
+  while (node) {
+    CacheNode* temp = node;
+    node = node->next;
+    free(temp->key);
+    free(temp);
   }
   free(cache->table);
   free(cache);
