@@ -4,8 +4,8 @@
   - wrapper over the ``base.cpp`` & it's functions, handling the training, encoding & decoding taks
   - to be compiled with ``base.cpp`` containing the main logic (no regex, no caching)
   - compile it as:
-    -- '.so': g++ -shared -fPIC -o libtoken.so main.cpp base.cpp / for linux
-    -- '.dll': g++ -shared -o libtoken.dll main.cpp base.cpp / for windows
+    -- '.so': g++ -shared -fPIC -o libtoken.so main.cpp base.cpp cache.cpp / for linux
+    -- '.dll': g++ -shared -o libtoken.dll main.cpp base.cpp cache.cpp / for windows
 */
 
 #ifndef __MAIN__H__
@@ -21,7 +21,6 @@ typedef struct {
 extern "C" {
   void init_shred(Shred* tokenizer);
   void train(Shred* tokenizer, const char* text, int vocab_size);
-  void train_with_lru_cache(Shred* tokenizer, const char* text, int vocab_size);
   char* decode(Shred* tokenizer, const int* ids, int ids_size);
   int* encode(Shred* tokenizer, const char* text, int* output_size);
   void save_model(const Shred* tokenizer, const char* file_path);
