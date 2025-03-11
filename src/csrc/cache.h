@@ -16,8 +16,9 @@
 #include "base.h"
 #include "main.h"
 
-#define MAX_THREADS 6
-#define INITIAL_CACHE_SIZE 1024  // max size of LRU cache
+extern int MAX_THREADS;  // declared globally
+void initialize_threads();  // function to set MAX_THREADS dynamically
+#define INITIAL_CACHE_SIZE 2048  // Max size of LRU cache
 static size_t token_length_cache[VOCAB_SIZE + MAX_MERGES];
 
 typedef struct {
@@ -30,38 +31,28 @@ typedef struct {
   size_t* output_size;
 } ThreadArgs;
 
-typedef struct CacheNode {
-  char* key;  // serialized form of token pair
-  int value;  // cached merged index
-  struct CacheNode* prev;
-  struct CacheNode* next;
-} CacheNode;
+// for training worker thread arguments
+typedef struct {
+  int idx1;
+  int idx2;
+  int freq;
+} PairStat;   // this is used in the training worker to count occurrences of adjacent token pairs
 
 typedef struct {
-  CacheNode* head;  // head of body of doubly linked list
-  CacheNode* tail;  // tail of body of doubly linked list
-  int size, capacity; // current size, & max capacity
-  CacheNode** table; // dynamically allocated hash table
-} LRUCache;
-
-typedef struct {
-  const Shred* base;
-  LRUCache* cache;
-} CachedShred;
+  const int* ids;
+  int start;
+  int end;
+  PairStat* local_stats;  // array to store partial pair stats (size at least INITIAL_CACHE_SIZE)
+  int* local_count;       // pointer to an int storing the number of distinct pairs found
+} TrainThreadArgs;
 
 extern "C" {
   void initialize_token_cache(const Shred* tokenizer);
   void* decode_worker(void* args);
   void* encode_worker(void* args);
-
+  void* train_worker(void* args);
+  void merge_train_stats(PairStat* global_stats, int* global_count, PairStat** partial_stats, int* counts, int num_threads);
   unsigned int hash(const char* key);
-  LRUCache* init_cache(int capacity);
-  void resize_cache(LRUCache* cache, int new_cap);
-  void remove_node(LRUCache* cache, CacheNode* node);
-  void add_to_front(LRUCache* cache, CacheNode* node);
-  int get(LRUCache* cache, const char* key);
-  void put(LRUCache* cache, const char* key, int value);
-  void free_cache(LRUCache* cache);
 }
 
 #endif

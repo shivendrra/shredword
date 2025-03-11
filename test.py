@@ -1,7 +1,7 @@
 from src import Shred
 
 tokenizer = Shred()
-input_file = "test data/training_data.txt"
+input_file = "test data/transcripts.txt"
 train_file = "test data/new.txt"
 
 with open(input_file, "r", encoding="utf-8") as f:
@@ -9,7 +9,7 @@ with open(input_file, "r", encoding="utf-8") as f:
 with open(train_file, "r", encoding="utf-8") as f:
   train = f.read()
 
-VOCAB_SIZE = 556
+VOCAB_SIZE = 1256
 tokenizer.train(text, VOCAB_SIZE)
 tokenizer.save("vocab/trained_vocab")
 tokenizer.load("vocab/trained_vocab.model")

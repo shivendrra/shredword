@@ -57,33 +57,64 @@ void train(Shred* tokenizer, const char* text, int vocab_size) {
   memcpy(vocab, tokenizer->base.vocab, VOCAB_SIZE * sizeof(VocabEntry));
 
   for (int i = 0; i < n_merges; i++) {
-    int stats[MAX_MERGES][3];
-    memset(stats, 0, sizeof(stats));
-    get_stats(ids, text_len, stats);
-
-    int max_occurrences = 0, max_ids = -1;
-    Pair max_pair = {0, 0};
-    for (int j = 0; j < MAX_MERGES && stats[j][2] > 0; j++) {
-      if (stats[j][2] > max_occurrences) {
-        max_occurrences = stats[j][2];
-        max_pair.idx1 = stats[j][0];
-        max_pair.idx2 = stats[j][1];
-        max_ids = j;
+    // parallel frequency counting using train_worker
+    int num_threads = MAX_THREADS;
+    pthread_t threads[MAX_THREADS];
+    TrainThreadArgs targs[MAX_THREADS];
+    PairStat* partial_stats[MAX_THREADS];
+    int local_counts[MAX_THREADS] = {0};
+    int chunk_size = text_len / num_threads;
+    for (int t = 0; t < num_threads; t++) {
+      targs[t].ids = ids;
+      targs[t].start = t * chunk_size;
+      targs[t].end = (t == num_threads - 1) ? text_len : (t + 1) * chunk_size;
+      partial_stats[t] = (PairStat*)malloc(INITIAL_CACHE_SIZE * sizeof(PairStat));
+      if (!partial_stats[t]) {
+        fprintf(stderr, "Error: Memory allocation for partial_stats failed for thread %d.\n", t);
+        exit(EXIT_FAILURE);
+      }
+      targs[t].local_stats = partial_stats[t];
+      targs[t].local_count = &local_counts[t];
+      *targs[t].local_count = 0;
+      if (pthread_create(&threads[t], NULL, train_worker, &targs[t]) != 0) {
+        fprintf(stderr, "Error: Failed to create training thread %d.\n", t);
+        exit(EXIT_FAILURE);
       }
     }
-    if (max_ids == -1 || max_occurrences == 0) {
+    // waiting for all training threads to complete
+    for (int t = 0; t < num_threads; t++) {
+      pthread_join(threads[t], NULL);
+    }
+    // merging partial frequency counts from each thread into a global stats table
+    PairStat global_stats[INITIAL_CACHE_SIZE];
+    int global_count = 0;
+    merge_train_stats(global_stats, &global_count, partial_stats, local_counts, num_threads);
+    // free per-thread partial stats
+    for (int t = 0; t < num_threads; t++) {
+      free(partial_stats[t]);
+    }
+    // selected the pair with the maximum frequency from the merged stats
+    int max_occurrences = 0;
+    Pair max_pair = {0, 0};
+    for (int j = 0; j < global_count; j++) {
+      if (global_stats[j].freq > max_occurrences) {
+        max_occurrences = global_stats[j].freq;
+        max_pair.idx1 = global_stats[j].idx1;
+        max_pair.idx2 = global_stats[j].idx2;
+      }
+    }
+    if (max_occurrences == 0) {
       printf("Stopping early at merge %d: No more pairs to merge.\n", i + 1);
       break;
     }
-
     int new_idx = VOCAB_SIZE + i;
     ids = merge(ids, text_len, max_pair, new_idx, &text_len);
 
-    // directly updating tokenizer->base.merges unlike the previous implementation where i used a buffer variable
-    // & fucked up the whole loigc & took 3 weeks to fix it (peak skill issue)
+    // update the merges in the tokenizer state
     tokenizer->base.merges[i].pair = max_pair;
     tokenizer->base.merges[i].idx = new_idx;
 
+    // creating the new vocabulary entry by concatenating the merged tokens
     size_t len1 = strlen(vocab[max_pair.idx1].value);
     size_t len2 = strlen(vocab[max_pair.idx2].value);
     vocab[new_idx].value = (char*)malloc(len1 + len2 + 1);
@@ -94,18 +125,17 @@ void train(Shred* tokenizer, const char* text, int vocab_size) {
     snprintf(vocab[new_idx].value, len1 + len2 + 1, "%s%s", vocab[max_pair.idx1].value, vocab[max_pair.idx2].value);
     vocab[new_idx].idx = new_idx;
 
-    // verbose logging is not optional
+    // verbose logging
     printf("\tMerge %d/%d: (%d, %d) -> %d (%s) had %d occurrences\n", i + 1, n_merges, max_pair.idx1, max_pair.idx2, new_idx, vocab[new_idx].value, max_occurrences);
     fflush(stdout);
   }
-  // removed tqdm, it was slowing the process down
-  // final updates
+  // final updates: update merge count and vocab in tokenizer
   tokenizer->base.merge_count = n_merges;
   memcpy(tokenizer->base.vocab, vocab, (VOCAB_SIZE + n_merges) * sizeof(VocabEntry));
   free(text_bytes);
   free(ids);
 
-  consistency_check(tokenizer, n_merges);  // consistency check function calling
+  consistency_check(tokenizer, n_merges);
 }
 
 char* decode(Shred* tokenizer, const int* ids, int ids_size) {
