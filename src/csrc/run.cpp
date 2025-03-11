@@ -1,7 +1,7 @@
 /*
   @run.cpp
-  - main run file for testing the bpe tokenization logic
-  - compile as: g++ -o run run.cpp main.cpp base.cpp
+  * main run file for testing the bpe tokenization logic
+  * compile as: g++ -o run run.cpp main.cpp base.cpp cache.cpp
     - run: ./run
 */
 
@@ -11,6 +11,8 @@
 #include <pthread.h>
 #include <string.h>
 #include "main.h"
+#include "cache.h"
+#include <time.h>
 
 // read the entire content of a file into a string
 char* read_file(const char* filename) {
@@ -36,6 +38,9 @@ char* read_file(const char* filename) {
 }
 
 int main() {
+  // initialize_threads();  // Set MAX_THREADS dynamically before any threading starts.
+  printf("Using %d threads for parallel processing.\n", MAX_THREADS);
+  // Now use MAX_THREADS for your parallel training, encoding, and decoding tasks.
   // paths to input files
   const char* train_file = "captions.txt";
   const char* test_file = "new.txt";
@@ -53,6 +58,8 @@ int main() {
   // tokenizer initialization
   Shred tokenizer;
   init_shred(&tokenizer);
+  time_t start_time, current_time;
+  double elapsed_time;
 
   // loading or train the tokenizer
   if (_access(model_file, 0) == 0) { // check if the model file exists
@@ -61,7 +68,12 @@ int main() {
     printf("Tokenizer model loaded.\n");
   } else {
     printf("Training tokenizer...\n");
-    train(&tokenizer, train_text, 266);
+    start_time = time(NULL);
+    train(&tokenizer, train_text, 276);
+    current_time = time(NULL);
+    elapsed_time = difftime(current_time, start_time);
+    printf("Elapsed time: %lf seconds\n", elapsed_time);
+    // train_parallely(&tokenizer, train_text, 276);
     printf("Training complete.\n");
 
     printf("Saving tokenizer model to %s...\n", model_file);
