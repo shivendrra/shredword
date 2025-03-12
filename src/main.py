@@ -31,19 +31,19 @@ class Shred:
 
   def train(self, text, vocab_size):
     text_c = ctypes.create_string_buffer(text.encode("utf-8"))
-    lib.train(ctypes.byref(self._tokenizer), text_c, vocab_size)
+    lib.train_with_incremental_cache(ctypes.byref(self._tokenizer), text_c, vocab_size)
 
   def encode(self, text):
     text_c = ctypes.create_string_buffer(text.encode("utf-8"))
     output_size = ctypes.c_int()
-    encoded_ptr = lib.encode(ctypes.byref(self._tokenizer), text_c, ctypes.byref(output_size))
+    encoded_ptr = lib.encode_with_cache(ctypes.byref(self._tokenizer), text_c, ctypes.byref(output_size))
     encoded = [encoded_ptr[i] for i in range(output_size.value)]
     return encoded
 
   def decode(self, ids):
     array_type = ctypes.c_int * len(ids)
     id_array = array_type(*ids)
-    decoded_ptr = lib.decode(ctypes.byref(self._tokenizer), id_array, len(ids))
+    decoded_ptr = lib.decode_with_cache(ctypes.byref(self._tokenizer), id_array, len(ids))
     decoded = ctypes.string_at(decoded_ptr).decode("utf-8")
     return decoded
 
