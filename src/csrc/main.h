@@ -26,6 +26,8 @@ extern "C" {
 
   char* decode(Shred* tokenizer, const int* ids, int ids_size);
   int* encode(Shred* tokenizer, const char* text, int* output_size);
+  char* decode_with_cache(Shred* tokenizer, const int* ids, int ids_size);
+  int* encode_with_cache(Shred* tokenizer, const char* text, int* output_size);
 
   void save_model(const Shred* tokenizer, const char* file_path);
   void load_model(Shred* tokenizer, const char* model_file);

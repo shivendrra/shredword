@@ -31,7 +31,7 @@ class Shred:
 
   def train(self, text, vocab_size):
     text_c = ctypes.create_string_buffer(text.encode("utf-8"))
-    lib.train(ctypes.byref(self._tokenizer), text_c, vocab_size)
+    lib.train_with_incremental_cache(ctypes.byref(self._tokenizer), text_c, vocab_size)
 
   def encode(self, text):
     text_c = ctypes.create_string_buffer(text.encode("utf-8"))
