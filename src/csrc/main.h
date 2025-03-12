@@ -21,6 +21,8 @@ typedef struct {
 extern "C" {
   void init_shred(Shred* tokenizer);
   void train(Shred* tokenizer, const char* text, int vocab_size);
+  void train_with_cache(Shred* tokenizer, const char* text, int vocab_size);
+  void train_with_incremental_cache(Shred* tokenizer, const char* text, int vocab_size);
 
   char* decode(Shred* tokenizer, const int* ids, int ids_size);
   int* encode(Shred* tokenizer, const char* text, int* output_size);
