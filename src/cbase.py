@@ -69,12 +69,10 @@ lib.free_tokenizer.restype = None
 # Map Shred functions
 lib.init_shred.argtypes = [ctypes.POINTER(CShred)]
 lib.init_shred.restype = None
-lib.train.argtypes = [ctypes.POINTER(CShred), ctypes.c_char_p, ctypes.c_int]
-lib.train.restype = None
 lib.train_with_cache.argtypes = [ctypes.POINTER(CShred), ctypes.c_char_p, ctypes.c_int]
 lib.train_with_cache.restype = None
-lib.train_with_incremental_cache.argtypes = [ctypes.POINTER(CShred), ctypes.c_char_p, ctypes.c_int]
-lib.train_with_incremental_cache.restype = None
+lib.train_optimized.argtypes = [ctypes.POINTER(CShred), ctypes.c_char_p, ctypes.c_int, ctypes.c_int]
+lib.train_optimized.restype = None
 lib.encode.argtypes = [ctypes.POINTER(CShred), ctypes.c_char_p, ctypes.POINTER(ctypes.c_int)]
 lib.encode.restype = ctypes.POINTER(ctypes.c_int)
 lib.decode.argtypes = [ctypes.POINTER(CShred), ctypes.POINTER(ctypes.c_int), ctypes.c_int]
