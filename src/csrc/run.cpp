@@ -68,7 +68,7 @@ int main() {
     start_time = time(NULL);
     // train(&tokenizer, train_text, 276);
     // train_with_cache(&tokenizer, train_text, 276);
-    train_with_incremental_cache(&tokenizer, train_text, 276);
+    train_optimized(&tokenizer, train_text, 1256, 5000);
     current_time = time(NULL);
     elapsed_time = difftime(current_time, start_time);
     printf("Elapsed time: %lf seconds\n", elapsed_time);
