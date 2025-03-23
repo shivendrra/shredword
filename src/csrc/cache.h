@@ -101,11 +101,6 @@ extern "C" {
   TokenPair pq_pop(PriorityQueue* pq);
   int pq_empty(PriorityQueue* pq);
 
-  /* ---------- Incremental Merge Helpers ---------- */
-  int* merge_with_positions(const int* ids, int ids_size, Pair pair, int new_token, size_t* new_size, int** merge_positions, int* num_positions);
-  void update_frequency_cache_for_merge(const int* ids, int ids_size, int merge_pos, int new_token);
-  void clear_merged_pair_in_cache(Pair pair);
-
 #ifdef __cplusplus
 }
 #endif

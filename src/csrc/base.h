@@ -37,7 +37,6 @@ typedef struct {
 
 extern "C" {
   void init_tokenizer(BaseTokenizer* tokenizer);
-  void build_vocab(BaseTokenizer* tokenizer);
   void replace_control_characters(const char* input, char* output);
   void save_tokenizer(const BaseTokenizer* tokenizer, const char* file_path);
   void load_tokenizer(BaseTokenizer* tokenizer, const char* model_file);

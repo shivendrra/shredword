@@ -13,29 +13,6 @@ void init_shred(Shred* tokenizer) {
   initialize_caches();
 }
 
-void consistency_check(Shred* tokenizer, int n_merges) {
-  // consistency check
-  // matches all the merged pairs with the verbose outputs pair by pair & logs the errors
-  printf("\nPerforming consistency check for merges...\n");
-  int mismatch_count = 0;
-  for (int i = 0; i < n_merges; i++) {
-    if (tokenizer->base.merges[i].pair.idx1 != tokenizer->base.merges[i].pair.idx1 ||
-      tokenizer->base.merges[i].pair.idx2 != tokenizer->base.merges[i].pair.idx2) {
-      printf("Mismatch at merge %d: Expected (%d, %d), Found (%d, %d)\n",
-             i + 1,
-             tokenizer->base.merges[i].pair.idx1, tokenizer->base.merges[i].pair.idx2,
-             tokenizer->base.merges[i].pair.idx1, tokenizer->base.merges[i].pair.idx2);
-      mismatch_count++;
-    }
-  }
-
-  if (mismatch_count == 0) {
-    printf("All merges are consistent between the training logic and tokenizer state.\n");
-  } else {
-    printf("Consistency check failed: %d mismatches found in the merges.\n", mismatch_count);
-  }
-}
-
 // helper function: compute simple hash string for int array
 static void hash_ids(const int* ids, int ids_size, char* out_key, int out_key_size) {
   unsigned long h = 5381;
@@ -46,7 +23,7 @@ static void hash_ids(const int* ids, int ids_size, char* out_key, int out_key_si
 }
 
 /* 
-   New optimized training function:
+  New optimized training function:
    - Uses multi-threaded frequency counting (as before)
    - Then builds a priority queue (binary heap) for fast merge selection
    - Filters out low-frequency pairs (frequency < MIN_PAIR_FREQUENCY)
@@ -178,7 +155,6 @@ void optimized_train_bpe(Shred* tokenizer, const char* text, int vocab_size, int
   memcpy(tokenizer->base.vocab, vocab, (VOCAB_SIZE + n_merges) * sizeof(VocabEntry));
   free(text_bytes);
   free(ids);
-  consistency_check(tokenizer, n_merges);
   pq_free(pq);
 }
 
@@ -313,7 +289,6 @@ void dynamic_train_bpe(Shred* tokenizer, const char* text, int vocab_size, int m
   tokenizer->base.merge_count = merge_count;
   memcpy(tokenizer->base.vocab, vocab, (VOCAB_SIZE + merge_count) * sizeof(VocabEntry));
   free(ids);
-  consistency_check(tokenizer, merge_count);
 }
 
 char* decode(Shred* tokenizer, const int* ids, int ids_size) {
