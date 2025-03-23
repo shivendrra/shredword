@@ -32,7 +32,7 @@ class Shred:
   def train(self, text, vocab_size, min_freq=None):
     min_freq = 0 if min_freq is None else min_freq
     text_c = ctypes.create_string_buffer(text.encode("utf-8"))
-    lib.train_optimized(ctypes.byref(self._tokenizer), text_c, vocab_size, min_freq)
+    lib.dynamic_train_bpe(ctypes.byref(self._tokenizer), text_c, vocab_size, min_freq)
 
   def encode(self, text):
     text_c = ctypes.create_string_buffer(text.encode("utf-8"))
