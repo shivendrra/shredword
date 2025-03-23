@@ -52,11 +52,11 @@ static void hash_ids(const int* ids, int ids_size, char* out_key, int out_key_si
    - Filters out low-frequency pairs (frequency < MIN_PAIR_FREQUENCY)
    - Uses the original merge() function for compatibility
 */
-void train_optimized(Shred* tokenizer, const char* text, int vocab_size, int min_freq) {
+void optimized_train_bpe(Shred* tokenizer, const char* text, int vocab_size, int min_freq) {
   assert(vocab_size >= VOCAB_SIZE);
   int n_merges = vocab_size - VOCAB_SIZE;
   size_t text_len = strlen(text);
-  
+
   unsigned char* text_bytes = (unsigned char*) malloc((text_len + 1) * sizeof(unsigned char));
   if (!text_bytes) {
     fprintf(stderr, "Error: Memory allocation for text_bytes failed.\n");
@@ -64,7 +64,7 @@ void train_optimized(Shred* tokenizer, const char* text, int vocab_size, int min
   }
   memcpy(text_bytes, text, text_len);
   text_bytes[text_len] = '\0';
-  
+
   int* ids = (int*) malloc(text_len * sizeof(int));
   if (!ids) {
     fprintf(stderr, "Error: Memory allocation for ids failed.\n");
@@ -74,11 +74,11 @@ void train_optimized(Shred* tokenizer, const char* text, int vocab_size, int min
   for (size_t i = 0; i < text_len; i++) {
     ids[i] = text_bytes[i];
   }
-  
+
   VocabEntry vocab[VOCAB_SIZE + MAX_MERGES];
   memcpy(vocab, tokenizer->base.vocab, VOCAB_SIZE * sizeof(VocabEntry));
-  
-  // Parallel frequency counting using train_worker (same as original)
+
+  // Parallel frequency counting using train_worker
   int num_threads = MAX_THREADS;
   pthread_t threads[MAX_THREADS];
   TrainThreadArgs targs[MAX_THREADS];
@@ -111,7 +111,7 @@ void train_optimized(Shred* tokenizer, const char* text, int vocab_size, int min
   for (int t = 0; t < num_threads; t++) {
     free(partial_stats[t]);
   }
-  
+
   // Build a priority queue for merge selection
   int min_pair_freq = min_freq == 0 ? MIN_PAIR_FREQUENCY : min_freq;
   PriorityQueue* pq = pq_create(1024);
@@ -124,7 +124,7 @@ void train_optimized(Shred* tokenizer, const char* text, int vocab_size, int min
       pq_push(pq, tp);
     }
   }
-  
+
   // Merge loop using priority queue
   for (int i = 0; i < n_merges; i++) {
     if (pq_empty(pq)) {
@@ -133,7 +133,7 @@ void train_optimized(Shred* tokenizer, const char* text, int vocab_size, int min
     }
     TokenPair best = pq_pop(pq);
     int new_idx = VOCAB_SIZE + i;
-    
+
     // Create a merge key from hash of ids and merge parameters
     char merge_key[128];
     char ids_hash[32];
@@ -146,14 +146,16 @@ void train_optimized(Shred* tokenizer, const char* text, int vocab_size, int min
       ids = cached_ids;
       text_len = cached_size / sizeof(int);
     } else {
+      int* old_ids = ids;  // save pointer to current ids
       ids = merge(ids, text_len, (Pair){best.idx1, best.idx2}, new_idx, &text_len);
+      free(old_ids);       // free the old ids to prevent memory leak
       lru_cache_put(g_train_cache, merge_key, ids, text_len * sizeof(int));
     }
-    
-    // Clear the merged pair from the training cache.
+
+    // Clear the merged pair from the training cache
     clear_merged_pair_in_cache((Pair){best.idx1, best.idx2});
-    
-    // Update vocabulary for new token.
+
+    // Update vocabulary for new token
     size_t len1 = strlen(vocab[best.idx1].value);
     size_t len2 = strlen(vocab[best.idx2].value);
     vocab[new_idx].value = (char*) malloc(len1 + len2 + 1);
@@ -163,41 +165,40 @@ void train_optimized(Shred* tokenizer, const char* text, int vocab_size, int min
     }
     snprintf(vocab[new_idx].value, len1 + len2 + 1, "%s%s", vocab[best.idx1].value, vocab[best.idx2].value);
     vocab[new_idx].idx = new_idx;
-    
-    tokenizer->base.merges[i].pair.idx1 = best.idx1;
-    tokenizer->base.merges[i].pair.idx2 = best.idx2;
-    tokenizer->base.merges[i].idx = new_idx;
-    
-    // printf("Merge %d: (%d, %d) -> %d, freq = %d\n", i + 1, best.idx1, best.idx2, new_idx, best.frequency);
+
     printf("\tMerge %d/%d: (%d [%s], %d [%s]) -> %d [%s] had %d occurrences\n",
-      i + 1, n_merges, best.idx1, vocab[best.idx1].value, best.idx2, vocab[best.idx2].value, new_idx, vocab[new_idx].value, best.frequency);
+      i + 1, n_merges, best.idx1, vocab[best.idx1].value, best.idx2, vocab[best.idx2].value,
+      new_idx, vocab[new_idx].value, best.frequency);
     fflush(stdout);
-    
+
     // Note: For simplicity, we do not update the priority queue with new neighbor frequencies
   }
-  
+
   tokenizer->base.merge_count = n_merges;
   memcpy(tokenizer->base.vocab, vocab, (VOCAB_SIZE + n_merges) * sizeof(VocabEntry));
   free(text_bytes);
   free(ids);
-  consistency_check(tokenizer, n_merges); 
+  consistency_check(tokenizer, n_merges);
   pq_free(pq);
 }
 
-void train_with_cache(Shred* tokenizer, const char* text, int vocab_size) {
+void dynamic_train_bpe(Shred* tokenizer, const char* text, int vocab_size, int min_freq) {
+  // Ensure that vocab_size is large enough.
   assert(vocab_size >= VOCAB_SIZE);
   int n_merges = vocab_size - VOCAB_SIZE;
+  int merge_count = 0;
   size_t text_len = strlen(text);
-  
-  unsigned char* text_bytes = (unsigned char*) malloc((text_len + 1) * sizeof(unsigned char));
+
+  // Create initial ids array from the text.
+  unsigned char* text_bytes = (unsigned char*)malloc((text_len + 1) * sizeof(unsigned char));
   if (!text_bytes) {
     fprintf(stderr, "Error: Memory allocation for text_bytes failed.\n");
     exit(EXIT_FAILURE);
   }
   memcpy(text_bytes, text, text_len);
   text_bytes[text_len] = '\0';
-  
-  int* ids = (int*) malloc(text_len * sizeof(int));
+
+  int* ids = (int*)malloc(text_len * sizeof(int));
   if (!ids) {
     fprintf(stderr, "Error: Memory allocation for ids failed.\n");
     free(text_bytes);
@@ -206,83 +207,113 @@ void train_with_cache(Shred* tokenizer, const char* text, int vocab_size) {
   for (size_t i = 0; i < text_len; i++) {
     ids[i] = text_bytes[i];
   }
-  
+  free(text_bytes);
+
+  // Copy initial vocabulary from the tokenizer.
   VocabEntry vocab[VOCAB_SIZE + MAX_MERGES];
   memcpy(vocab, tokenizer->base.vocab, VOCAB_SIZE * sizeof(VocabEntry));
-  
-  // Build initial frequency cache for all adjacent pairs.
-  for (int i = 0; i < text_len - 1; i++) {
-    char key[64];
-    snprintf(key, sizeof(key), "P:%d,%d", ids[i], ids[i + 1]);
-    size_t size;
-    int* freq = (int*) lru_cache_get(g_train_cache, key, &size);
-    int new_freq = (freq ? *freq : 0) + 1;
-    if (freq) free(freq);
-    lru_cache_put(g_train_cache, key, &new_freq, sizeof(int));
-  }
-  
-  // Incremental merging loop.
-  for (int i = 0; i < n_merges; i++) {
-    // Find the most frequent pair in the training cache.
-    int max_occurrences = 0;
-    Pair max_pair = {0, 0};
-    for (int j = 0; j < g_train_cache->capacity; j++) {
-      if (g_train_cache->entries[j].key != NULL) {
-        int freq = *((int*) g_train_cache->entries[j].value);
-        if (freq > max_occurrences) {
-          max_occurrences = freq;
-          int a, b;
-          sscanf(g_train_cache->entries[j].key, "P:%d,%d", &a, &b);
-          max_pair.idx1 = a;
-          max_pair.idx2 = b;
-        }
+
+  // Main merging loop.
+  while (merge_count < n_merges) {
+    // --- Step 1: Compute frequency statistics ---
+    int num_threads = MAX_THREADS;
+    pthread_t threads[MAX_THREADS];
+    TrainThreadArgs targs[MAX_THREADS];
+    PairStat* partial_stats_arr[MAX_THREADS];
+    int local_counts[MAX_THREADS] = {0};
+    int current_ids_len = text_len;
+    int chunk_size = current_ids_len / num_threads;
+    for (int t = 0; t < num_threads; t++) {
+      targs[t].ids = ids;
+      targs[t].start = t * chunk_size;
+      targs[t].end = (t == num_threads - 1) ? current_ids_len : (t + 1) * chunk_size;
+      partial_stats_arr[t] = (PairStat*)malloc(INITIAL_CACHE_SIZE * sizeof(PairStat));
+      if (!partial_stats_arr[t]) {
+        fprintf(stderr, "Error: Memory allocation for partial_stats failed for thread %d.\n", t);
+        exit(EXIT_FAILURE);
+      }
+      targs[t].local_stats = partial_stats_arr[t];
+      targs[t].local_count = &local_counts[t];
+      *targs[t].local_count = 0;
+      if (pthread_create(&threads[t], NULL, train_worker, &targs[t]) != 0) {
+        fprintf(stderr, "Error: Failed to create training thread %d.\n", t);
+        exit(EXIT_FAILURE);
       }
     }
-    if (max_occurrences == 0) {
-      printf("Stopping early at merge %d: No more pairs to merge.\n", i + 1);
+    for (int t = 0; t < num_threads; t++) {
+      pthread_join(threads[t], NULL);
+    }
+    PairStat global_stats[INITIAL_CACHE_SIZE];
+    int global_count = 0;
+    merge_train_stats(global_stats, &global_count, partial_stats_arr, local_counts, num_threads);
+    for (int t = 0; t < num_threads; t++) {
+      free(partial_stats_arr[t]);
+    }
+
+    // --- Step 2: Build priority queue from stats ---
+    PriorityQueue* pq = pq_create(1024);
+    for (int j = 0; j < global_count; j++) {
+      // Only consider pairs with frequency >= min_freq (if specified)
+      if (global_stats[j].freq >= (min_freq > 0 ? min_freq : 1)) {
+        TokenPair tp;
+        tp.idx1 = global_stats[j].idx1;
+        tp.idx2 = global_stats[j].idx2;
+        tp.frequency = global_stats[j].freq;
+        pq_push(pq, tp);
+      }
+    }
+    if (pq_empty(pq)) {
+      pq_free(pq);
       break;
     }
-    
-    int new_idx = VOCAB_SIZE + i;
-    int* merge_positions;
-    int num_positions;
-    // Perform merge and obtain positions.
-    int* new_ids = merge_with_positions(ids, text_len, max_pair, new_idx, &text_len, &merge_positions, &num_positions);
-    free(ids);
-    ids = new_ids;
-    
-    // For each merge position, update the cache for neighboring pairs.
-    for (int k = 0; k < num_positions; k++) {
-      update_frequency_cache_for_merge(ids, text_len, merge_positions[k], new_idx);
+
+    // --- Step 3: Extract a batch of top pairs (up to 15) ---
+    int batch_size = ((n_merges - merge_count) < 15) ? (n_merges - merge_count) : 15;
+    TokenPair batch_merges[15];
+    int actual_batch = 0;
+    for (int i = 0; i < batch_size && !pq_empty(pq); i++) {
+      batch_merges[i] = pq_pop(pq);
+      actual_batch++;
     }
-    free(merge_positions);
-    // Clear the merged pair from the cache.
-    clear_merged_pair_in_cache(max_pair);
-    
-    // Update tokenizer merges and build new vocabulary entry.
-    tokenizer->base.merges[i].pair = max_pair;
-    tokenizer->base.merges[i].idx = new_idx;
-    size_t len1 = strlen(vocab[max_pair.idx1].value);
-    size_t len2 = strlen(vocab[max_pair.idx2].value);
-    vocab[new_idx].value = (char*) malloc(len1 + len2 + 1);
-    if (!vocab[new_idx].value) {
-      fprintf(stderr, "Error: Memory allocation for vocab[%d].value failed.\n", new_idx);
-      exit(EXIT_FAILURE);
+    pq_free(pq);
+
+    // --- Step 4: Apply each merge in the batch ---
+    for (int i = 0; i < actual_batch; i++) {
+      TokenPair best = batch_merges[i];
+      int new_idx = VOCAB_SIZE + merge_count;  // New token index
+      int* old_ids = ids;
+      ids = merge(ids, text_len, (Pair){best.idx1, best.idx2}, new_idx, &text_len);
+      free(old_ids);
+      
+      // Update vocabulary: create a new token by concatenating the two tokens.
+      size_t len1 = strlen(vocab[best.idx1].value);
+      size_t len2 = strlen(vocab[best.idx2].value);
+      vocab[new_idx].value = (char*)malloc(len1 + len2 + 1);
+      if (!vocab[new_idx].value) {
+        fprintf(stderr, "Error: Memory allocation for vocab[%d].value failed.\n", new_idx);
+        exit(EXIT_FAILURE);
+      }
+      snprintf(vocab[new_idx].value, len1 + len2 + 1, "%s%s", vocab[best.idx1].value, vocab[best.idx2].value);
+      vocab[new_idx].idx = new_idx;
+      
+      tokenizer->base.merges[merge_count].pair.idx1 = best.idx1;
+      tokenizer->base.merges[merge_count].pair.idx2 = best.idx2;
+      tokenizer->base.merges[merge_count].idx = new_idx;
+      
+      printf("Merge %d: (%d, %d) -> %d [%s] had %d occurrences\n",
+             merge_count + 1, best.idx1, best.idx2, new_idx, vocab[new_idx].value, best.frequency);
+      merge_count++;
+      if (merge_count >= n_merges)
+        break;
     }
-    snprintf(vocab[new_idx].value, len1 + len2 + 1, "%s%s", vocab[max_pair.idx1].value, vocab[max_pair.idx2].value);
-    vocab[new_idx].idx = new_idx;
-    
-    printf("\tMerge %d/%d: (%d, %d) -> %d (%s) had %d occurrences\n",
-           i + 1, n_merges, max_pair.idx1, max_pair.idx2, new_idx, vocab[new_idx].value, max_occurrences);
-    fflush(stdout);
+    // Continue loop with updated ids (and updated text_len).
   }
   
-  tokenizer->base.merge_count = n_merges;
-  memcpy(tokenizer->base.vocab, vocab, (VOCAB_SIZE + n_merges) * sizeof(VocabEntry));
-  
-  free(text_bytes);
+  // --- Finalize ---
+  tokenizer->base.merge_count = merge_count;
+  memcpy(tokenizer->base.vocab, vocab, (VOCAB_SIZE + merge_count) * sizeof(VocabEntry));
   free(ids);
-  consistency_check(tokenizer, n_merges);
+  consistency_check(tokenizer, merge_count);
 }
 
 char* decode(Shred* tokenizer, const int* ids, int ids_size) {

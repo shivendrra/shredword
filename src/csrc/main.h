@@ -20,8 +20,8 @@ typedef struct {
 
 extern "C" {
   void init_shred(Shred* tokenizer);
-  void train_with_cache(Shred* tokenizer, const char* text, int vocab_size);
-  void train_optimized(Shred* tokenizer, const char* text, int vocab_size, int min_freq);
+  void optimized_train_bpe(Shred* tokenizer, const char* text, int vocab_size, int min_freq);
+  void dynamic_train_bpe(Shred* tokenizer, const char* text, int vocab_size, int min_freq);
 
   char* decode(Shred* tokenizer, const int* ids, int ids_size);
   int* encode(Shred* tokenizer, const char* text, int* output_size);

@@ -74,10 +74,11 @@ void get_stats(const int* ids, int ids_size, int stats[MAX_MERGES][3]) {
 }
 
 int* merge(const int* ids, int ids_size, Pair pair, int idx, size_t* new_size) {
-  int* new_ids = (int*)malloc(ids_size * sizeof(int));
+  int estimated_size = ids_size - 1; // Worst case: one merge reduces size by 1
+  int* new_ids = (int*)malloc(estimated_size * sizeof(int));
   if (!new_ids) {
     fprintf(stderr, "Error: Memory allocation failed in merge().\n");
-    exit(EXIT_FAILURE);
+    return NULL;  // Instead of exiting, return NULL so caller can handle failure
   }
   int new_idx = 0;
   for (int i = 0; i < ids_size; i++) {
