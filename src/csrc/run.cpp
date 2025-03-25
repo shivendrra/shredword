@@ -10,9 +10,9 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <string.h>
+#include <time.h>
 #include "main.h"
 #include "cache.h"
-#include <time.h>
 
 // read the entire content of a file into a string
 char* read_file(const char* filename) {
@@ -39,7 +39,7 @@ char* read_file(const char* filename) {
 
 int main() {
   // paths to input files
-  const char* train_file = "training_data.txt";
+  const char* train_file = "train.txt";
   const char* test_file = "new.txt";
   const char* model_file = "trained_vocab.model";
 
@@ -66,13 +66,11 @@ int main() {
   } else {
     printf("Training tokenizer...\n");
     start_time = time(NULL);
-    // train(&tokenizer, train_text, 276);
-    // train_with_cache(&tokenizer, train_text, 276);
-    train_with_incremental_cache(&tokenizer, train_text, 276);
+    optimized_train_bpe(&tokenizer, train_text, 1256, 5000);
+    dynamic_train_bpe(&tokenizer, train_text, 1256, 5000);
     current_time = time(NULL);
     elapsed_time = difftime(current_time, start_time);
     printf("Elapsed time: %lf seconds\n", elapsed_time);
-    // train_parallely(&tokenizer, train_text, 276);
     printf("Training complete.\n");
 
     printf("Saving tokenizer model to %s...\n", model_file);
@@ -80,40 +78,44 @@ int main() {
     printf("Tokenizer model saved.\n");
   }
 
-  // // encoding test data
-  // printf("Encoding test data...\n");
-  // int encoded_size;
-  // int* encoded_ids = encode(&tokenizer, test_text, &encoded_size);
-  // printf("Encoded IDs (%d tokens): ", encoded_size);
-  // for (int i = 0; i < encoded_size; i++) {
-  //   printf("%d ", encoded_ids[i]);
-  // }
-  // printf("\n\n");
+  // encoding test data
+  printf("Encoding test data...\n");
+  int encoded_size;
+  start_time = time(NULL);
+  int* encoded_ids = encode(&tokenizer, train_text, &encoded_size);
+  current_time = time(NULL);
+  elapsed_time = difftime(current_time, start_time);
+  printf("Elapsed time: %lf seconds\n", elapsed_time);
+  printf("Encoded IDs (%d tokens): ", encoded_size);
+  for (int i = 0; i < encoded_size; i++) {
+    printf("%d ", encoded_ids[i]);
+  }
+  printf("\n\n");
 
-  // // decoding the encoded data
-  // printf("Decoding back to text...\n");
-  // char* decoded_text = decode(&tokenizer, encoded_ids, encoded_size);
-  // printf("Decoded text (%lu characters):\n%s\n\n", strlen(decoded_text), decoded_text);
+  // decoding the encoded data
+  printf("Decoding back to text...\n");
+  char* decoded_text = decode(&tokenizer, encoded_ids, encoded_size);
+  printf("Decoded text (%lu characters):\n%s\n\n", strlen(decoded_text), decoded_text);
 
-  // // verify original and decoded texts
-  // if (strcmp(test_text, decoded_text) == 0) {
-  //   printf("Decoded text matches the original test text.\n");
-  // } else {
-  //   printf("Decoded text does NOT match the original test text.\n");
-  //   // locating the first difference
-  //   for (size_t i = 0; i < strlen(test_text); i++) {
-  //     if (test_text[i] != decoded_text[i]) {
-  //       printf("Mismatch at character %lu: Original '%c', Decoded '%c'\n", i, test_text[i], decoded_text[i]);
-  //       break;
-  //     }
-  //   }
-  // }
+  // verify original and decoded texts
+  if (strcmp(test_text, decoded_text) == 0) {
+    printf("Decoded text matches the original test text.\n");
+  } else {
+    printf("Decoded text does NOT match the original test text.\n");
+    // locating the first difference
+    for (size_t i = 0; i < strlen(test_text); i++) {
+      if (test_text[i] != decoded_text[i]) {
+        printf("Mismatch at character %lu: Original '%c', Decoded '%c'\n", i, test_text[i], decoded_text[i]);
+        break;
+      }
+    }
+  }
 
   // cleanup
   free(train_text);
   free(test_text);
-  // free(encoded_ids);
-  // free(decoded_text);
+  free(encoded_ids);
+  free(decoded_text);
   free_tokenizer(&(tokenizer.base));
 
   return 0;

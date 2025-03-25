@@ -20,26 +20,6 @@ void init_tokenizer(BaseTokenizer* tokenizer) {
   }
 }
 
-void build_vocab(BaseTokenizer* tokenizer) {
-  for (int i = 0; i < tokenizer->merge_count; i++) {
-    int idx = VOCAB_SIZE + i;
-    Pair pair = tokenizer->merges[i].pair;
-
-    size_t len1 = strlen(tokenizer->vocab[pair.idx1].value);
-    size_t len2 = strlen(tokenizer->vocab[pair.idx2].value);
-
-    tokenizer->vocab[idx].value = (char*)malloc(len1 + len2 + 1);
-    strcpy(tokenizer->vocab[pair.idx1].value, tokenizer->vocab[pair.idx1].value);
-    strcpy(tokenizer->vocab[pair.idx2].value, tokenizer->vocab[pair.idx2].value);
-    tokenizer->vocab[idx].idx = idx;
-  }
-  for (int i = 0; i < tokenizer->special_token_count; i++) {
-    int idx = VOCAB_SIZE + tokenizer->merge_count + i;
-    tokenizer->vocab[idx].value = strdup(tokenizer->special_tokens[i]);
-    tokenizer->vocab[idx].idx = idx;
-  }
-}
-
 void get_stats(const int* ids, int ids_size, int stats[MAX_MERGES][3]) {
   for (int i = 0; i < MAX_MERGES; i++) {
     stats[i][0] = -1; // first token in the pair
@@ -74,10 +54,11 @@ void get_stats(const int* ids, int ids_size, int stats[MAX_MERGES][3]) {
 }
 
 int* merge(const int* ids, int ids_size, Pair pair, int idx, size_t* new_size) {
-  int* new_ids = (int*)malloc(ids_size * sizeof(int));
+  int estimated_size = ids_size - 1; // Worst case: one merge reduces size by 1
+  int* new_ids = (int*)malloc(estimated_size * sizeof(int));
   if (!new_ids) {
     fprintf(stderr, "Error: Memory allocation failed in merge().\n");
-    exit(EXIT_FAILURE);
+    return NULL;  // Instead of exiting, return NULL so caller can handle failure
   }
   int new_idx = 0;
   for (int i = 0; i < ids_size; i++) {

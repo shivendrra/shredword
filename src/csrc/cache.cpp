@@ -9,17 +9,17 @@
   #include <unistd.h>
 #endif
 
-#define DEFAULT_MAX_THREADS 8  // default fallback
+#define DEFAULT_MAX_THREADS 8
 
 int get_max_threads() {
   int num_threads = 1;
-  #ifdef _WIN32
-    SYSTEM_INFO sysinfo;
-    GetSystemInfo(&sysinfo);
-    num_threads = sysinfo.dwNumberOfProcessors;
-  #else
-    num_threads = sysconf(_SC_NPROCESSORS_ONLN);
-  #endif
+#ifdef _WIN32
+  SYSTEM_INFO sysinfo;
+  GetSystemInfo(&sysinfo);
+  num_threads = sysinfo.dwNumberOfProcessors;
+#else
+  num_threads = sysconf(_SC_NPROCESSORS_ONLN);
+#endif
   int max_threads = (num_threads > 2) ? (num_threads - 2) : 1;
   printf("Detected CPU threads: %d, using max threads: %d\n", num_threads, max_threads);
   return max_threads;
@@ -32,12 +32,12 @@ void initialize_threads() {
 size_t token_length_cache[VOCAB_SIZE + MAX_MERGES] = {0};
 
 void initialize_token_cache(const Shred* tokenizer) {
-  for (int i = 0; i < VOCAB_SIZE + MAX_MERGES; i++) {
-    if (tokenizer->base.vocab[i].value) {
+  int total = VOCAB_SIZE + MAX_MERGES;
+  for (int i = 0; i < total; i++) {
+    if (tokenizer->base.vocab[i].value)
       token_length_cache[i] = strlen(tokenizer->base.vocab[i].value);
-    } else {
+    else
       token_length_cache[i] = 0;
-    }
   }
 }
 
@@ -58,7 +58,7 @@ void* train_worker(void* args) {
   int end = targs->end;
   for (int i = start; i < end - 1; i++) {
     int a = ids[i];
-    int b = ids[i + 1];
+    int b = ids[i+1];
     int found = 0;
     for (int j = 0; j < *(targs->local_count); j++) {
       if (targs->local_stats[j].idx1 == a && targs->local_stats[j].idx2 == b) {
@@ -287,88 +287,76 @@ void initialize_caches() {
   if (!g_train_cache) g_train_cache = create_lru_cache(10240);
 }
 
-// ---------------------- Incremental Merge Caching Helpers ----------------------
+/* ---------- Priority Queue (Binary Heap) for Training Merge Selection ---------- */
+static void swap_tokenpair(TokenPair* a, TokenPair* b) {
+  TokenPair temp = *a;
+  *a = *b;
+  *b = temp;
+}
 
-// merge_with_positions(): Given the current ids array, it scans for every occurrence 
-// of 'pair' and replaces it with 'new_token'. It returns the new ids array,
-// its new size (in *new_size) and an array (merge_positions) containing the positions
-// (in the new ids array) where a merge occurred
-int* merge_with_positions(const int* ids, int ids_size, Pair pair, int new_token, size_t* new_size, int** merge_positions, int* num_positions) {
-  int* new_ids = (int*) malloc(ids_size * sizeof(int));
-  if (!new_ids) {
-    fprintf(stderr, "Error: Memory allocation failed in merge_with_positions.\n");
-    exit(EXIT_FAILURE);
+PriorityQueue* pq_create(int capacity) {
+  PriorityQueue* pq = (PriorityQueue*) malloc(sizeof(PriorityQueue));
+  pq->data = (TokenPair*) malloc(capacity * sizeof(TokenPair));
+  pq->size = 0;
+  pq->capacity = capacity;
+  return pq;
+}
+
+void pq_free(PriorityQueue* pq) {
+  if (pq) {
+    free(pq->data);
+    free(pq);
   }
-  int* positions = (int*) malloc(ids_size * sizeof(int));  // worst-case allocation
-  if (!positions) {
-    fprintf(stderr, "Error: Memory allocation failed for positions in merge_with_positions.\n");
-    exit(EXIT_FAILURE);
-  }
-  int pos_count = 0;
-  int new_idx = 0;
-  for (int i = 0; i < ids_size; i++) {
-    if (i < ids_size - 1 && ids[i] == pair.idx1 && ids[i + 1] == pair.idx2) {
-      new_ids[new_idx] = new_token;
-      positions[pos_count++] = new_idx;
-      new_idx++;
-      i++; // skip next token because it’s merged
+}
+
+void pq_heapify_up(PriorityQueue* pq, int idx) {
+  while (idx > 0) {
+    int parent = (idx - 1) / 2;
+    if (pq->data[idx].frequency > pq->data[parent].frequency) {
+      swap_tokenpair(&pq->data[idx], &pq->data[parent]);
+      idx = parent;
     } else {
-      new_ids[new_idx++] = ids[i];
+      break;
     }
   }
-  *new_size = new_idx;
-  *merge_positions = (int*) realloc(positions, pos_count * sizeof(int));
-  *num_positions = pos_count;
-  return new_ids;
 }
 
-// update_frequency_cache_for_merge(): For one merge occurrence at position merge_pos (in the updated ids array),
-// update the frequency cache for the left and right neighbors. It decrements the frequency
-// for the old adjacent pair and increments the frequency for the new pair with new_token
-void update_frequency_cache_for_merge(const int* ids, int ids_size, int merge_pos, int new_token) {
-  size_t size;
-  // Update left neighbor if merge_pos > 0.
-  if (merge_pos > 0) {
-    char key_old[64];
-    snprintf(key_old, sizeof(key_old), "P:%d,%d", ids[merge_pos - 1], ids[merge_pos]);
-    int* freq_old = (int*) lru_cache_get(g_train_cache, key_old, &size);
-    int f_old = (freq_old ? *freq_old : 0);
-    if (freq_old) free(freq_old);
-    if (f_old > 0) f_old--;
-    lru_cache_put(g_train_cache, key_old, &f_old, sizeof(int));
-
-    char key_new[64];
-    snprintf(key_new, sizeof(key_new), "P:%d,%d", ids[merge_pos - 1], new_token);
-    int* freq_new = (int*) lru_cache_get(g_train_cache, key_new, &size);
-    int f_new = (freq_new ? *freq_new : 0);
-    if (freq_new) free(freq_new);
-    f_new++;
-    lru_cache_put(g_train_cache, key_new, &f_new, sizeof(int));
-  }
-  // Update right neighbor if merge_pos < ids_size - 1.
-  if (merge_pos < ids_size - 1) {
-    char key_old[64];
-    snprintf(key_old, sizeof(key_old), "P:%d,%d", ids[merge_pos], ids[merge_pos + 1]);
-    int* freq_old = (int*) lru_cache_get(g_train_cache, key_old, &size);
-    int f_old = (freq_old ? *freq_old : 0);
-    if (freq_old) free(freq_old);
-    if (f_old > 0) f_old--;
-    lru_cache_put(g_train_cache, key_old, &f_old, sizeof(int));
-
-    char key_new[64];
-    snprintf(key_new, sizeof(key_new), "P:%d,%d", new_token, ids[merge_pos + 1]);
-    int* freq_new = (int*) lru_cache_get(g_train_cache, key_new, &size);
-    int f_new = (freq_new ? *freq_new : 0);
-    if (freq_new) free(freq_new);
-    f_new++;
-    lru_cache_put(g_train_cache, key_new, &f_new, sizeof(int));
+void pq_heapify_down(PriorityQueue* pq, int idx) {
+  while (1) {
+    int left = 2 * idx + 1;
+    int right = 2 * idx + 2;
+    int largest = idx;
+    if (left < pq->size && pq->data[left].frequency > pq->data[largest].frequency)
+      largest = left;
+    if (right < pq->size && pq->data[right].frequency > pq->data[largest].frequency)
+      largest = right;
+    if (largest != idx) {
+      swap_tokenpair(&pq->data[idx], &pq->data[largest]);
+      idx = largest;
+    } else {
+      break;
+    }
   }
 }
 
-// Optionally, clear the frequency for the merged pair from the training cache.
-void clear_merged_pair_in_cache(Pair pair) {
-  char key[64];
-  snprintf(key, sizeof(key), "P:%d,%d", pair.idx1, pair.idx2);
-  int zero = 0;
-  lru_cache_put(g_train_cache, key, &zero, sizeof(int));
+void pq_push(PriorityQueue* pq, TokenPair pair) {
+  if (pq->size == pq->capacity) {
+    pq->capacity *= 2;
+    pq->data = (TokenPair*) realloc(pq->data, pq->capacity * sizeof(TokenPair));
+  }
+  pq->data[pq->size] = pair;
+  pq_heapify_up(pq, pq->size);
+  pq->size++;
+}
+
+TokenPair pq_pop(PriorityQueue* pq) {
+  TokenPair top = pq->data[0];
+  pq->size--;
+  pq->data[0] = pq->data[pq->size];
+  pq_heapify_down(pq, 0);
+  return top;
+}
+
+int pq_empty(PriorityQueue* pq) {
+  return (pq->size == 0);
 }

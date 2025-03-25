@@ -2,14 +2,14 @@ from src import Shred
 import timeit
 
 tokenizer = Shred()
-input_file = "test data/training_data.txt"
+input_file = "test data/final.txt"
 train_file = "test data/new.txt"
 
 with open(input_file, "r", encoding="utf-8") as f:
   text = f.read()
 
-VOCAB_SIZE = 276
-start_time = timeit.default_timer()
+VOCAB_SIZE = 1256
+# start_time = timeit.default_timer()
 # tokenizer.train(text, VOCAB_SIZE)
 # tokenizer.save("vocab/trained_vocab")
 # end_time = timeit.default_timer()
