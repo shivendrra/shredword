@@ -1,7 +1,7 @@
 /*
   @run.cpp
   * main run file for testing the bpe tokenization logic
-  * compile as: g++ -o run run.cpp main.cpp base.cpp cache.cpp -lpthread
+  * compile as: g++ -o run run.cpp main.cpp base.cpp cache.cpp train.cpp -lpthread
     - run: ./run
 */
 
@@ -13,6 +13,7 @@
 #include <time.h>
 #include "main.h"
 #include "cache.h"
+#include "train.h"
 
 // read the entire content of a file into a string
 char* read_file(const char* filename) {
@@ -66,7 +67,7 @@ int main() {
   } else {
     printf("Training tokenizer...\n");
     start_time = time(NULL);
-    optimized_train_bpe(&tokenizer, train_text, 1256, 5000);
+    // optimized_train(&tokenizer, train_text, 1256, 5000);
     dynamic_train_bpe(&tokenizer, train_text, 1256, 5000);
     current_time = time(NULL);
     elapsed_time = difftime(current_time, start_time);

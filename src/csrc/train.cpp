@@ -6,6 +6,114 @@
 #include "cache.h"
 #include "base.h"
 
+#define MIN_PAIR_FREQUENCY 5000  // fallback minimum frequency if not provided
+
+// Optimized training function using techniques inspired by SentencePiece.
+// This function uses multi-threaded frequency counting, filters out pairs
+// with frequency below min_freq, and reuses the overall design of the codebase.
+void optimized_train(Shred* tokenizer, const char* text, int vocab_size, int min_freq) {
+  assert(vocab_size >= VOCAB_SIZE);
+  int n_merges = vocab_size - VOCAB_SIZE;
+  int merge_count = 0;
+  size_t text_len = strlen(text);
+
+  // Convert text to ids (one id per character).
+  int* ids = (int*)malloc(text_len * sizeof(int));
+  if (!ids) {
+    fprintf(stderr, "Error: Memory allocation for ids failed.\n");
+    exit(EXIT_FAILURE);
+  }
+  for (size_t i = 0; i < text_len; i++) {
+    ids[i] = (unsigned char)text[i];
+  }
+
+  // Copy the initial vocabulary from the tokenizer.
+  VocabEntry vocab[VOCAB_SIZE + MAX_MERGES];
+  memcpy(vocab, tokenizer->base.vocab, VOCAB_SIZE * sizeof(VocabEntry));
+
+  // Main merging loop.
+  while (merge_count < n_merges) {
+    int num_threads = MAX_THREADS;
+    pthread_t threads[MAX_THREADS];
+    TrainThreadArgs targs[MAX_THREADS];
+    PairStat* partial_stats_arr[MAX_THREADS];
+    int local_counts[MAX_THREADS] = {0};
+    int current_ids_len = (int)text_len;
+    int chunk_size = current_ids_len / num_threads;
+    
+    // Launch multi-threaded frequency counting.
+    for (int t = 0; t < num_threads; t++) {
+      targs[t].ids = ids;
+      targs[t].start = t * chunk_size;
+      targs[t].end = (t == num_threads - 1) ? current_ids_len : (t + 1) * chunk_size;
+      partial_stats_arr[t] = (PairStat*)malloc(INITIAL_CACHE_SIZE * sizeof(PairStat));
+      if (!partial_stats_arr[t]) {
+        fprintf(stderr, "Error: Memory allocation for partial_stats failed for thread %d.\n", t);
+        exit(EXIT_FAILURE);
+      }
+      targs[t].local_stats = partial_stats_arr[t];
+      targs[t].local_count = &local_counts[t];
+      *targs[t].local_count = 0;
+      if (pthread_create(&threads[t], NULL, train_worker, &targs[t]) != 0) {
+        fprintf(stderr, "Error: Failed to create training thread %d.\n", t);
+        exit(EXIT_FAILURE);
+      }
+    }
+    for (int t = 0; t < num_threads; t++) {
+      pthread_join(threads[t], NULL);
+    }
+    PairStat global_stats[INITIAL_CACHE_SIZE];
+    int global_count = 0;
+    merge_train_stats(global_stats, &global_count, partial_stats_arr, local_counts, num_threads);
+    for (int t = 0; t < num_threads; t++) {
+      free(partial_stats_arr[t]);
+    }
+
+    // Find the most frequent pair that meets the minimum frequency threshold.
+    int best_index = -1;
+    int best_freq = 0;
+    Pair best_pair = {0, 0};
+    for (int i = 0; i < global_count; i++) {
+      if (global_stats[i].freq >= min_freq && global_stats[i].freq > best_freq) {
+        best_freq = global_stats[i].freq;
+        best_pair.idx1 = global_stats[i].idx1;
+        best_pair.idx2 = global_stats[i].idx2;
+        best_index = i;
+      }
+    }
+    if (best_index == -1 || best_freq == 0) {
+      printf("Stopping early at merge %d: No candidate pairs with frequency >= %d found.\n", merge_count + 1, min_freq);
+      break;
+    }
+
+    int new_idx = VOCAB_SIZE + merge_count;
+    int* old_ids = ids;
+    ids = merge(old_ids, current_ids_len, best_pair, new_idx, &text_len);
+    free(old_ids);
+
+    // Update the tokenizer's merge records.
+    tokenizer->base.merges[merge_count].pair = best_pair;
+    tokenizer->base.merges[merge_count].idx = new_idx;
+
+    // Build the new vocabulary entry by concatenating the two token strings.
+    size_t len1 = strlen(vocab[best_pair.idx1].value);
+    size_t len2 = strlen(vocab[best_pair.idx2].value);
+    vocab[new_idx].value = (char*)malloc(len1 + len2 + 1);
+    if (!vocab[new_idx].value) {
+      fprintf(stderr, "Error: Memory allocation for vocab[%d].value failed.\n", new_idx);
+      exit(EXIT_FAILURE);
+    }
+    snprintf(vocab[new_idx].value, len1 + len2 + 1, "%s%s", vocab[best_pair.idx1].value, vocab[best_pair.idx2].value);
+    vocab[new_idx].idx = new_idx;
+
+    printf("Merge %d: (%d, %d) -> %d [%s] freq: %d\n", merge_count + 1, best_pair.idx1, best_pair.idx2, new_idx, vocab[new_idx].value, best_freq);
+    merge_count++;
+  }
+  tokenizer->base.merge_count = merge_count;
+  memcpy(tokenizer->base.vocab, vocab, (VOCAB_SIZE + merge_count) * sizeof(VocabEntry));
+  free(ids);
+}
+
 /* 
   New optimized training function:
    - Uses multi-threaded frequency counting (as before)
@@ -205,13 +313,13 @@ void dynamic_train_bpe(Shred* tokenizer, const char* text, int vocab_size, int m
       tokenizer->base.merges[merge_count].pair.idx2 = best.idx2;
       tokenizer->base.merges[merge_count].idx = new_idx;
       
-      printf("Merge %d: (%d, %d) -> %d [%s] had %d occurrences\n",
+      printf("[DEBUG MESSAGE][1] Merge %d: (%d, %d) -> %d [%s] had %d occurrences\n",
              merge_count + 1, best.idx1, best.idx2, new_idx, vocab[new_idx].value, best.frequency);
       merge_count++;
       if (merge_count >= n_merges)
         break;
     }
-    // Continue loop with updated ids (and updated text_len).
+    // Continue loop with updated ids (and updated text_len)
   }
   
   // --- Finalize ---
