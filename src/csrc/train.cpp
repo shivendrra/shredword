@@ -2,9 +2,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <unicode/unorm2.h>
+#include <unicode/utypes.h>
 #include "train.h"
-#include "cache.h"
-#include "base.h"
 
 #define MIN_PAIR_FREQUENCY 5000  // fallback minimum frequency if not provided
 

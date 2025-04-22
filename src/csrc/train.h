@@ -5,6 +5,7 @@
 #include "main.h"
 
 extern "C" {
+  char* normalize_text(const char* input);  // normalize input text to NFKC form and replace spaces with "▁"
   void train(Shred* tokenizer, const char* text, int vocab_size);
   void dynamic_train_bpe(Shred* tokenizer, const char* text, int vocab_size, int min_freq);
 

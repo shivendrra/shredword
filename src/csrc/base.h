@@ -8,46 +8,23 @@
 #ifndef __BASE__H__
 #define __BASE__H__
 
-#define VOCAB_SIZE 256
-#define MAX_LINE_LENGTH 2048
-#define MAX_SPECIAL_TOKENS 100
-#define MAX_MERGES 10000
+#include <cstddef>
+#include <ctype.h>
 
-typedef struct {
-  int idx1, idx2;
-} Pair;
+#define NUM_CHARS 256
 
-typedef struct {
-  int idx;
-  char* value;
-} VocabEntry;
-
-typedef struct {
-  Pair pair;
-  int idx;
-} MergeEntry;
-
-typedef struct {
-  VocabEntry vocab[VOCAB_SIZE + MAX_MERGES];
-  MergeEntry merges[MAX_MERGES];
-  int merge_count, vocab_size, special_token_indices[MAX_SPECIAL_TOKENS], special_token_count;
-  char special_tokens[MAX_SPECIAL_TOKENS][MAX_LINE_LENGTH], pattern[MAX_LINE_LENGTH];
-} BaseTokenizer;
+typedef struct TrieNode {
+  struct TrieNode *children[NUM_CHARS];
+  bool terminal;
+} TrieNode;
 
 extern "C" {
-  void init_tokenizer(BaseTokenizer* tokenizer);
-  // normalize input text to NFKC form and replace spaces with "▁"
-  char* normalize_text(const char* input);
-
-  void get_stats(const int* ids, int ids_size, int stats[MAX_MERGES][3]);
-  int* merge(const int* ids, int ids_size, Pair pair, int idx, size_t* new_size);
-  void render_token(const char* token, char* output);
-  void replace_control_characters(const char* input, char* output);
-
-  void save_tokenizer(const BaseTokenizer* tokenizer, const char* file_path);
-  void load_tokenizer(BaseTokenizer* tokenizer, const char* model_file);
-
-  void free_tokenizer(BaseTokenizer* tokenizer);
+  // functions for creating/modifying `trie`
+  TrieNode *create_node();
+  void trie_insert(TrieNode *root, const char* word);
+  int longest_prefix(TrieNode *root, const char* text);
+  void free_trie(TrieNode *node);   // freeing the trie from the memory
+  void print_trie(TrieNode *node);  // prints all the nodes recursively
 }
 
 #endif
