@@ -1,8 +1,8 @@
-/*
-  base.h
-  * Base class for basic BPE functions & logics.
-  * Contains functions for tokenizer initialization, normalization, and helper routines.
-  * To be compiled with base.cpp containing the main logic (no regex, no caching)
+/**
+  @base.h Base class for basic BPE functions & logics.
+
+  * functions for tokenizer initialization, normalization, and helper routines.
+  * compliation with base.cpp containing the main logic (no regex, no caching)
 */
 
 #ifndef __BASE__H__
@@ -25,6 +25,10 @@ extern "C" {
   int longest_prefix(TrieNode *root, const char* text);
   void free_trie(TrieNode *node);   // freeing the trie from the memory
   void print_trie(TrieNode *node);  // prints all the nodes recursively
+
+  char* normalize_text(const char* input);  // normalize input text to NFKC form and replace spaces with "▁"
+  void save_vocab(TrieNode* root, const char* vocab_file);
+  TrieNode* load_vocab(const char* vocab_file);
 }
 
 #endif

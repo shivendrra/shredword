@@ -5,7 +5,7 @@
 #include "main.h"
 
 extern "C" {
-  char* normalize_text(const char* input);  // normalize input text to NFKC form and replace spaces with "▁"
+  void train_vocab(const char* train_file, const char* vocab_file);
 }
 
 #endif  //!__TRAIN__H__
