@@ -1,18 +1,16 @@
 /*
   @run.cpp
-  * main run file for testing the bpe tokenization logic
-  * compile as: g++ -o run run.cpp main.cpp base.cpp cache.cpp train.cpp -lpthread
+  * main run file for testing the BPE trie-based tokenizer and vocab training
+  * compile as: g++ -o run run.cpp main.cpp base.cpp train.cpp -licuuc -licudata
     - run: ./run
 */
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include <pthread.h>
 #include <string.h>
 #include <time.h>
-#include "main.h"
-#include "cache.h"
+#include "base.h"
 #include "train.h"
 
 // read the entire content of a file into a string
@@ -39,85 +37,20 @@ char* read_file(const char* filename) {
 }
 
 int main() {
-  // paths to input files
   const char* train_file = "train.txt";
-  const char* test_file = "new.txt";
-  const char* model_file = "trained_vocab.model";
+  const char* vocab_file = "vocab.txt";
 
-  // reading training and test data
-  printf("Reading training data from %s...\n", train_file);
-  char* train_text = read_file(train_file);
-  printf("Training data imported.\n");
+  printf("Training vocabulary from %s...\n", train_file);
+  time_t start_time = time(NULL);
+  train_vocab(train_file, vocab_file);
+  time_t end_time = time(NULL);
+  printf("Vocabulary training complete in %.2lf seconds.\n", difftime(end_time, start_time));
 
-  printf("Reading test data from %s...\n", test_file);
-  char* test_text = read_file(test_file);
-  printf("Test data imported.\n");
-
-  // tokenizer initialization
-  Shred tokenizer;
-  init_shred(&tokenizer);
-  time_t start_time, current_time;
-  double elapsed_time;
-
-  // loading or train the tokenizer
-  if (_access(model_file, 0) == 0) { // check if the model file exists
-    printf("Loading tokenizer model from %s...\n", model_file);
-    load_model(&tokenizer, model_file);
-    printf("Tokenizer model loaded.\n");
-  } else {
-    printf("Training tokenizer...\n");
-    start_time = time(NULL);
-    // optimized_train(&tokenizer, train_text, 1256, 5000);
-    dynamic_train_bpe(&tokenizer, train_text, 1256, 5000);
-    current_time = time(NULL);
-    elapsed_time = difftime(current_time, start_time);
-    printf("Elapsed time: %lf seconds\n", elapsed_time);
-    printf("Training complete.\n");
-
-    printf("Saving tokenizer model to %s...\n", model_file);
-    save_model(&tokenizer, model_file);
-    printf("Tokenizer model saved.\n");
-  }
-
-  // encoding test data
-  printf("Encoding test data...\n");
-  int encoded_size;
-  start_time = time(NULL);
-  int* encoded_ids = encode(&tokenizer, train_text, &encoded_size);
-  current_time = time(NULL);
-  elapsed_time = difftime(current_time, start_time);
-  printf("Elapsed time: %lf seconds\n", elapsed_time);
-  printf("Encoded IDs (%d tokens): ", encoded_size);
-  for (int i = 0; i < encoded_size; i++) {
-    printf("%d ", encoded_ids[i]);
-  }
-  printf("\n\n");
-
-  // decoding the encoded data
-  printf("Decoding back to text...\n");
-  char* decoded_text = decode(&tokenizer, encoded_ids, encoded_size);
-  printf("Decoded text (%lu characters):\n%s\n\n", strlen(decoded_text), decoded_text);
-
-  // verify original and decoded texts
-  if (strcmp(test_text, decoded_text) == 0) {
-    printf("Decoded text matches the original test text.\n");
-  } else {
-    printf("Decoded text does NOT match the original test text.\n");
-    // locating the first difference
-    for (size_t i = 0; i < strlen(test_text); i++) {
-      if (test_text[i] != decoded_text[i]) {
-        printf("Mismatch at character %lu: Original '%c', Decoded '%c'\n", i, test_text[i], decoded_text[i]);
-        break;
-      }
-    }
-  }
-
-  // cleanup
-  free(train_text);
-  free(test_text);
-  free(encoded_ids);
-  free(decoded_text);
-  free_tokenizer(&(tokenizer.base));
+  printf("Printing vocabulary from %s...\n", vocab_file);
+  TrieNode* vocab = create_node();
+  load_vocab(vocab, vocab_file);
+  print_trie(vocab);
+  free_trie(vocab);
 
   return 0;
 }

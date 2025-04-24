@@ -203,15 +203,28 @@ void save_vocab(TrieNode* root, const char* vocab_file) {
   fclose(out);
 }
 
-TrieNode* load_vocab(const char* vocab_file) {
-  TrieNode* root = create_node();
-  FILE* in = fopen(vocab_file, "r");
-  if (!in) { perror("fopen(vocab_file)"); return root; }
-  char line[1024];
-  while (fgets(line, sizeof(line), in)) {
+void load_vocab(TrieNode* root, const char* model_file) {
+  if (!root) {
+    fprintf(stderr, "Error: Trie pointer is null.\n");
+    exit(EXIT_FAILURE);
+  }
+  if (!model_file) {
+    fprintf(stderr, "Error: model_file pointer is null.\n");
+    exit(EXIT_FAILURE);
+  }
+
+  printf("Loading vocab & model from: '%s' \n", model_file);
+  FILE* fp = fopen(model_file, "r");
+  if (!fp) {
+    fprintf(stderr, "Error: Could not open model file: %s\n", model_file);
+    exit(EXIT_FAILURE);
+  }
+  char line[MAX_LINE_LENGTH];
+  fgets(line, MAX_LINE_LENGTH, fp); // version
+  while (fgets(line, sizeof(line), fp)) {
     line[strcspn(line, "\r\n")] = '\0';
     if (line[0]) trie_insert(root, line);
   }
-  fclose(in);
-  return root;
+  printf("Loaded saved merges successfully!\n");
+  fclose(fp);
 }

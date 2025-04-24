@@ -12,6 +12,7 @@
 #include <ctype.h>
 
 #define NUM_CHARS 256
+#define  MAX_LINE_LENGTH  1024
 
 typedef struct TrieNode {
   struct TrieNode *children[NUM_CHARS];
@@ -27,8 +28,8 @@ extern "C" {
   void print_trie(TrieNode *node);  // prints all the nodes recursively
 
   char* normalize_text(const char* input);  // normalize input text to NFKC form and replace spaces with "▁"
-  void save_vocab(TrieNode* root, const char* vocab_file);
-  TrieNode* load_vocab(const char* vocab_file);
+  void save_vocab(TrieNode* root, const char* file_prefix);
+  void load_vocab(TrieNode* root, const char* model_file);
 }
 
 #endif

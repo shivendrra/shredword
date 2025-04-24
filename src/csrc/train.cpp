@@ -23,9 +23,9 @@ static void save_vocab_recursively(TrieNode* node, FILE* out, unsigned char* buf
 */
 void train_vocab(const char* train_file, const char* vocab_file) {
   // loading existing vocab or start fresh
-  TrieNode* root;
+  TrieNode* root = create_node();
   FILE* test = fopen(vocab_file, "r");
-  if (test) { fclose(test); root = load_vocab(vocab_file); }
+  if (test) { fclose(test); load_vocab(root, vocab_file); }
   else { root = create_node(); }
 
   // opening training data
