@@ -1,4 +1,4 @@
-from src import Shred
+from shred import Shred
 import timeit
 
 tokenizer = Shred()

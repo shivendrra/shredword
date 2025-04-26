@@ -8,7 +8,7 @@ encode_decode_test.py
 """
 
 import time, tracemalloc
-from src.main import Shred
+from shred.main import Shred
 
 
 def read_file(filename):

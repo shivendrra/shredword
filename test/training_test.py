@@ -7,7 +7,7 @@ training_test.py
 """
 
 import time, tracemalloc
-from src.main import Shred
+from shred.main import Shred
 
 def read_file(filename):
   with open(filename, "r", encoding="utf-8") as f:
