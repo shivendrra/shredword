@@ -4,9 +4,12 @@
 
 #include "base.h"
 
-extern "C" {
+typedef struct TokenPairs {
+  int first, second;
+} TokenPairs;
 
-  // void train_vocab(const char* train_file, const char* vocab_file, int vocab_limit);
+extern "C" {
+  void bpe_learn(const char* train_file, int merge_steps, TrieNode* root);
   void train_vocab(const char* train_file, const char* vocab_file, int merge_steps);
 }
 
