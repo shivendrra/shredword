@@ -27,7 +27,6 @@ extern "C" {
   void free_trie(TrieNode *node);   // freeing the trie from the memory
   void print_trie(TrieNode *node);  // prints all the nodes recursively
 
-  char* normalize_text(const char* input);  // normalize input text to NFKC form and replace spaces with "▁"
   void save_vocab(TrieNode* root, const char* file_prefix);
   void load_vocab(TrieNode* root, const char* model_file);
 }

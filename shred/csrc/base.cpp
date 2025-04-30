@@ -1,9 +1,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <unicode/unorm2.h>
-#include <unicode/utypes.h>
-#include <unicode/ustring.h>
 #include "base.h"
 
 TrieNode *create_node() {
@@ -82,102 +79,6 @@ void free_trie(TrieNode *node) {
     free_trie(node->children[i]);
   }
   delete node;
-}
-
-/**
-  @brief Normalize input UTF-8 text to NFKC form and replace spaces with "▁" (U+2581).
-
-  * This implementation dynamically allocates buffers based on the required output sizes.
-  * It ensures correctness for inputs of arbitrary length and avoids fixed-size limitations.
-
-  * @param input_text A null-terminated UTF-8 encoded string.
-  * @return A newly allocated UTF-8 normalized string with spaces replaced.
-          - The caller is responsible for freeing the returned string.
-*/
-char* normalize_text(const char* input_text) {
-  UErrorCode status = U_ZERO_ERROR;
-
-  const UNormalizer2* normalizer = unorm2_getNFKCInstance(&status);
-  if (U_FAILURE(status)) {
-    fprintf(stderr, "Failed to get NKFC-instance: %s\n", u_errorName(status));
-    return NULL;
-  }
- 
-  // Converting UTF-8 to UTF-16
-  int32_t utf16_len = 0;
-  u_strFromUTF8(NULL, 0, &utf16_len, input_text, -1, &status);
-  if (status != U_BUFFER_OVERFLOW_ERROR && U_FAILURE(status)) {
-    fprintf(stderr, "UTF-8 to UTF-16 sizing failed: %s\n", u_errorName(status));
-    return NULL;
-  }
-  status = U_ZERO_ERROR;
-
-  UChar* utf16 = (UChar*)malloc((utf16_len + 1) * sizeof(UChar));
-  u_strFromUTF8(utf16, utf16_len + 1, NULL, input_text, -1, &status);
-  if (U_FAILURE(status)) {
-    fprintf(stderr, "UTF-8 to UTF-16 conversion failed: %s\n", u_errorName(status));
-    free(utf16);
-    return NULL;
-  }
-
-  // Normalizing in UTF-16
-  int32_t norm16_len = unorm2_normalize(normalizer, utf16, utf16_len, NULL, 0, &status);
-  if (status != U_BUFFER_OVERFLOW_ERROR && U_FAILURE(status)) {
-    fprintf(stderr, "Normalization sizing failed: %s\n", u_errorName(status));
-    free(utf16);
-    return NULL;
-  }
-  status = U_ZERO_ERROR;
-
-  UChar* norm16 = (UChar*)malloc((norm16_len + 1) * sizeof(UChar));
-  unorm2_normalize(normalizer, utf16, utf16_len, norm16, norm16_len + 1, &status);
-  free(utf16);
-  if (U_FAILURE(status)) {
-    fprintf(stderr, "Normalization failed: %s\n", u_errorName(status));
-    free(norm16);
-    return NULL;
-  }
-
-  // Converting UTF-16 back to UTF-8
-  int32_t norm8_len = 0;
-  u_strToUTF8(NULL, 0, &norm8_len, norm16, norm16_len, &status);
-  if (status != U_BUFFER_OVERFLOW_ERROR && U_FAILURE(status)) {
-    fprintf(stderr, "UTF-16 to UTF-8 sizing failed: %s\n", u_errorName(status));
-    free(norm16);
-    return NULL;
-  }
-  status = U_ZERO_ERROR;
-
-  char* norm8 = (char*)malloc(norm8_len + 1);
-  u_strToUTF8(norm8, norm8_len + 1, NULL, norm16, norm16_len, &status);
-  free(norm16);
-  if (U_FAILURE(status)) {
-    fprintf(stderr, "UTF-16 to UTF-8 conversion failed: %s\n", u_errorName(status));
-    free(norm8);
-    return NULL;
-  }
-
-  // replacing all the ASCII spaces with U+2581 (UTF-8: E2 96 81)
-  const char* rep = "\xE2\x96\x81";
-  size_t rep_len = 3, final_len = 0;
-
-  for (int i = 0; i < norm8_len; i++)
-    final_len += (norm8[i] == ' ') ? rep_len : 1;
-
-  char* final = (char*)malloc(final_len + 1);
-  size_t j = 0;
-  for (int i = 0; i < norm8_len; i++) {
-    if (norm8[i] == ' ') {
-      memcpy(&final[j], rep, rep_len);
-      j += rep_len;
-    } else {
-      final[j++] = norm8[i];
-    }
-  }
-  final[j] = '\0';
-  free(norm8);
-
-  return final;
 }
 
 // helper function for saving new vocabs in tries, recursively
