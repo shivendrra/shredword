@@ -42,7 +42,7 @@ int main() {
 
   printf("Training vocabulary from %s...\n", train_file);
   time_t start_time = time(NULL);
-  train_vocab(train_file, vocab_file, 300);
+  train_vocab(train_file, vocab_file, 1000);
   time_t end_time = time(NULL);
   printf("Vocabulary training complete in %.2lf seconds.\n", difftime(end_time, start_time));
 

@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include "base.h"
 
-TrieNode *create_node() {
+TrieNode* create_node() {
   TrieNode* node = (TrieNode*)malloc(sizeof(TrieNode));
   node->terminal = false;
   for (int i = 0; i < NUM_CHARS; i++) {
@@ -12,7 +12,7 @@ TrieNode *create_node() {
   return node;
 }
 
-void trie_insert(TrieNode *root, const char *word) {
+void trie_insert(TrieNode* root, const char *word) {
   if (root == NULL) {
     root = create_node();
   }
@@ -45,7 +45,7 @@ int longest_prefix(TrieNode* root, const char* text) {
   return max_len;
 }
 
-void print_trie_recursively(TrieNode *node, unsigned char *prefix, int length) {
+void print_trie_recursively(TrieNode* node, unsigned char *prefix, int length) {
   unsigned char newprefix[length+2];
   memcpy(newprefix, prefix, length);
   newprefix[length+1] = 0;
@@ -62,7 +62,7 @@ void print_trie_recursively(TrieNode *node, unsigned char *prefix, int length) {
   }
 }
 
-void print_trie(TrieNode *node) {
+void print_trie(TrieNode* node) {
   if (node == NULL) {
     fprintf(stderr, "Error: Invaild Trie-Node to print.\n");
     exit(EXIT_FAILURE);
@@ -70,13 +70,13 @@ void print_trie(TrieNode *node) {
   print_trie_recursively(node, NULL, 0);
 }
 
-void free_trie(TrieNode *node) {
-  if (node == NULL) {
-    fprintf(stderr, "Error: Invaild Trie-Node to free from memory.\n");
-    exit(EXIT_FAILURE);
-  }
+void free_trie(TrieNode* node) {
+  if (!node) return;  // return silently (usually throws error when trie is initialized as NULL pointer)
+
   for (int i = 0; i < NUM_CHARS; ++i) {
-    free_trie(node->children[i]);
+    if (node->children[i]) {
+      free_trie(node->children[i]);
+    }
   }
   free(node);
 }
@@ -127,34 +127,4 @@ void load_vocab(TrieNode* root, const char* model_file) {
   }
   printf("Loaded saved merges successfully!\n");
   fclose(fp);
-}
-
-// Read a line, split on U+2581 marker into symbols array
-static int split_to_symbols(const char* line, char*** out_symbols) {
-  // worst case every byte is a separate UTF-8 symbol → allocate MAX_SEQ_LENGTH pointers
-  char** symbols = (char**)malloc(sizeof(char*) * MAX_SEQ_LENGTH);
-  int n = 0, i = 0, L = strlen(line);
-  while (i < L) {
-    // detect marker 0xE2 0x96 0x81
-    if (i+2 < L && (unsigned char)line[i] == 0xE2 && (unsigned char)line[i+1] == 0x96 && (unsigned char)line[i+2] == 0x81) {
-      symbols[n++] = strdup("▁");
-      i += 3;
-    } else {
-      // grabing one UTF-8 codepoint
-      int len = 1;
-      unsigned char c = line[i];
-      if (c >= 0xC0) {
-        if ((c & 0xE0) == 0xC0) len = 2;
-        else if ((c & 0xF0) == 0xE0) len = 3;
-        else if ((c & 0xF8) == 0xF0) len = 4;
-      }
-      char temp[MAX_SYMBOL_LEN];
-      strncpy(temp, line + i, len);
-      temp[len] = '\0';
-      symbols[n++] = strdup(temp);
-      i += len;
-    }
-  }
-  *out_symbols = symbols;
-  return n;
 }

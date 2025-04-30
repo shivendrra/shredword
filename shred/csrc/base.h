@@ -23,13 +23,11 @@ typedef struct TrieNode {
 } TrieNode;
 extern "C" {
   // functions for creating/modifying `trie`
-  TrieNode *create_node();
-  void trie_insert(TrieNode *root, const char* word);
-  int longest_prefix(TrieNode *root, const char* text);
-  void free_trie(TrieNode *node);   // freeing the trie from the memory
-  void print_trie(TrieNode *node);  // prints all the nodes recursively
-
-  static int split_to_symbols(const char* line, char*** out_symbols);
+  TrieNode* create_node();
+  void trie_insert(TrieNode* root, const char* word);
+  int longest_prefix(TrieNode* root, const char* text);
+  void free_trie(TrieNode* node);   // freeing the trie from the memory
+  void print_trie(TrieNode* node);  // prints all the nodes recursively
 
   // function for loading/saving vocabs
   void save_vocab(TrieNode* root, const char* file_prefix);
