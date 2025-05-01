@@ -4,6 +4,7 @@
 #include "inc/khash.h"
 #include "train.h"
 #include "base.h"
+#include "heap.h"
 
 KHASH_MAP_INIT_STR(str_int, int)  // Map from char* to int
 KHASH_MAP_INIT_STR(pair_int, int) // Map from pair string ("A\0B") to int
@@ -110,97 +111,125 @@ end_training:
    * @param vocab_limit Maximum number of unique tokens to extract.
 */
 void train_vocab_bpe(const char* train_file, const char* vocab_file, int merge_steps) {
-  printf("[DEBUG] train_vocab(): \"%s\" -> \"%s\" (%d steps)\n", train_file, vocab_file, merge_steps);
+  printf("[DEBUG] bpe_learn('%s', %d)\n", train_file, merge_steps);
 
-  TrieNode* root = create_node();
+  // --- Read & split corpus ---
+  FILE* f = fopen(train_file, "r");
+  if (!f) { perror("fopen train_file"); return; }
 
-  FILE* f = fopen(train_file,"r");
-  if (!f) { perror("[ERROR] fopen train_file"); return; }
-  int capacity = 1024, corpus_size = 0;
+  int capacity = 1024;
+  int corpus_size = 0;
   char*** seq_syms = (char***)malloc(sizeof(char**) * capacity);
   int* seq_lens = (int*)malloc(sizeof(int) * capacity);
-
   char buf[4096];
+
   while (fgets(buf, sizeof(buf), f)) {
     buf[strcspn(buf, "\r\n")] = '\0';
     if (!buf[0]) continue;
-    // growing the size  if needed
     if (corpus_size == capacity) {
       capacity *= 2;
       seq_syms = (char***)realloc(seq_syms, sizeof(char**) * capacity);
       seq_lens = (int*)realloc(seq_lens, sizeof(int) * capacity);
     }
-    // storinh
     seq_lens[corpus_size] = split_to_symbols(buf, &seq_syms[corpus_size]);
     corpus_size++;
-    if (corpus_size % 10000 == 0) printf("[DEBUG] read %d lines\n", corpus_size);
+    if (corpus_size % 10000 == 0) {
+      printf("[DEBUG] read %d lines\n", corpus_size);
+    }
   }
   fclose(f);
-  printf("[DEBUG] total lines read: %d\n", corpus_size);
-  
-  printf("[DEBUG] Starting BPE learning...\n");
-  for (int step = 0; step < merge_steps; step++) {
-    printf("[DEBUG] counting pairs for step %d\n", step+1);
-    // count all adjacent pairs
-    khash_t(pair_int)* pc = kh_init(pair_int);
-    for (int i = 0; i < corpus_size; i++) {
-      for (int j = 0; j +1 < seq_lens[i]; j++) {
-      // key = sym[j] + '\t' + sym[j+1]
-      char key[MAX_SYMBOL_LEN*2+1];
-      snprintf(key, sizeof(key), "%s\t%s", seq_syms[i][j], seq_syms[i][j+1]);
-      int ret; khiter_t k = kh_put(pair_int, pc, strdup(key), &ret);
-      kh_val(pc,k) += 1;
-      }
-    }
-    // find best_k
-    khiter_t best_k = kh_end(pc);
-    int best_c = 0;
-    for (khiter_t k = kh_begin(pc); k != kh_end(pc); k++) {
-      if (!kh_exist(pc, k)) continue;
-      if (kh_val(pc, k) > best_c) {
-      best_c = kh_val(pc, k);
-      best_k = k;
-      }
-    }
-    if (best_k == kh_end(pc)) { kh_destroy(pair_int, pc); break; }
-    const char* raw_key = kh_key(pc, best_k);
-    
-    // split key back
-    char* key_copy = strdup(raw_key);
-    char* A = strtok(key_copy, "\t"), *B = strtok(NULL, "\t");
-    char merged[MAX_SYMBOL_LEN*2];
-    snprintf(merged, sizeof(merged), "%s%s", A, B);
-    printf("[DEBUG] best pair: %s+%s count=%d\n", A, B, best_c);
-    printf("Merge %d: %s+%s (%d)\n", step+1, A, B, best_c);
+  printf("[DEBUG] total lines: %d\n", corpus_size);
 
-    // apply merge to corpus
+  TrieNode* root = create_node();
+
+  // --- Initial pair counting ---
+  khash_t(pair_int)* pc = kh_init(pair_int);
+  for (int i = 0; i < corpus_size; i++) {
+    for (int j = 0; j + 1 < seq_lens[i]; j++) {
+      char key[MAX_SYMBOL_LEN*2 + 2];
+      snprintf(key, sizeof(key), "%s\t%s", seq_syms[i][j], seq_syms[i][j+1]);
+      int ret;
+      khiter_t k = kh_put(pair_int, pc, strdup(key), &ret);
+      kh_val(pc, k)++;
+    }
+  }
+
+  // --- Build heap of all pairs ---
+  MaxHeap heap;
+  int init_cap = (int)kh_size(pc);
+  if (init_cap < 1) init_cap = 1;
+  heap_init(&heap, init_cap);
+  for (khiter_t k = kh_begin(pc); k != kh_end(pc); k++) {
+    if (!kh_exist(pc, k)) continue;
+    char* raw = strdup(kh_key(pc, k));
+    int f = kh_val(pc, k);
+    heap_push(&heap, raw, f);
+  }
+
+  // --- BPE merge loop ---
+  for (int step = 0; step < merge_steps && !heap_empty(&heap); step++) {
+    HeapEntry he = heap_pop(&heap);
+    char *A = strtok(he.key, "\t"), *B = strtok(NULL, "\t");
+    char merged[MAX_SYMBOL_LEN*2];
+    
+    snprintf(merged, sizeof(merged), "%s%s", A, B);
+    printf("[DEBUG] Merge %d: %s+%s (%d)\n", step+1, A, B, he.freq);
+    free(he.key);
+
+    // apply merge to each sequence
     for (int i = 0; i < corpus_size; i++) {
       char** in = seq_syms[i];
       int L = seq_lens[i];
-      char** out = (char**)malloc(sizeof(char*) * (L));
+      char** out = (char**)malloc(sizeof(char*) * L);
       int m = 0;
       for (int j = 0; j < L; j++) {
-        if (j + 1 < L && strcmp(in[j], A)==0 && strcmp(in[j + 1], B)==0) {
+        if (j+1 < L && strcmp(in[j], A)==0 && strcmp(in[j+1], B)==0) {
           out[m++] = strdup(merged);
-          j++; 
+          j++;
         } else {
           out[m++] = strdup(in[j]);
         }
       }
-
-      // freeing old seq
       for (int z = 0; z < L; z++) free(in[z]);
       free(in);
       seq_syms[i] = out;
       seq_lens[i] = m;
     }
 
-    // cleaning-up pair-count map
-    for (khiter_t k = kh_begin(pc); k != kh_end(pc); k++)
-    if (kh_exist(pc, k)) free((char*)kh_key(pc, k));
-    kh_destroy(pair_int, pc);
+    // every 50 merges, rebuild the heap from fresh counts
+    if ((step+1) % 50 == 0) {
+      printf("[DEBUG] Rebuilding pair heap at merge %d\n", step+1);
+      // clear khash & heap
+      for (khiter_t kk = kh_begin(pc); kk != kh_end(pc); kk++) {
+        if (kh_exist(pc,kk)) free((char*)kh_key(pc,kk));
+      }
+      kh_clear(pair_int, pc);
+      heap_free(&heap);
+      int init_cap = (int)kh_size(pc);
+      if (init_cap < 1) init_cap = 1;
+      heap_init(&heap, init_cap);
+
+      // recount pairs
+      for (int i = 0; i < corpus_size; i++) {
+        for (int j = 0; j + 1 < seq_lens[i]; j++) {
+          char key2[MAX_SYMBOL_LEN*2 + 2];
+          snprintf(key2, sizeof(key2), "%s\t%s", seq_syms[i][j], seq_syms[i][j+1]);
+          int ret; khiter_t kk = kh_put(pair_int, pc, strdup(key2), &ret);
+          kh_val(pc, kk)++;
+        }
+      }
+      // repopulate heap
+      for (khiter_t kk = kh_begin(pc); kk != kh_end(pc); kk++) {
+        if (!kh_exist(pc,kk)) continue;
+        char* raw2 = strdup(kh_key(pc,kk));
+        int f2 = kh_val(pc,kk);
+        heap_push(&heap, raw2, f2);
+      }
+    }
   }
-  printf("[DEBUG] inserting %d symbols into trie\n", corpus_size * 10);
+
+  // --- Insert into trie & cleanup ---
+  printf("[DEBUG] inserting symbols into trie\n");
   for (int i = 0; i < corpus_size; i++) {
     for (int j = 0; j < seq_lens[i]; j++) {
       trie_insert(root, seq_syms[i][j]);
@@ -208,13 +237,18 @@ void train_vocab_bpe(const char* train_file, const char* vocab_file, int merge_s
     }
     free(seq_syms[i]);
   }
-  printf("[DEBUG] BPE learning done.\n");
 
-  printf("[DEBUG] Saving vocab to \"%s\"...\n", vocab_file);
-  save_vocab(root, vocab_file);
-  printf("[DEBUG] Vocab saved.\n");
+  save_vocab(root, vocab_file);  // saving the trained vocabs
 
-  printf("[DEBUG] Freeing trie...\n");
+  free(seq_syms);
+  free(seq_lens);
   free_trie(root);
-  printf("[DEBUG] train_vocab() complete.\n");
+
+  // free heap and khash
+  heap_free(&heap);
+  for (khiter_t k = kh_begin(pc); k != kh_end(pc); k++)
+    if (kh_exist(pc,k)) free((char*)kh_key(pc,k));
+  kh_destroy(pair_int, pc);
+
+  printf("[DEBUG] bpe learning complete.\n");
 }

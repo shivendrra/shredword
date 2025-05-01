@@ -21,6 +21,7 @@ typedef struct TrieNode {
   struct TrieNode *children[NUM_CHARS];
   bool terminal;
 } TrieNode;
+
 extern "C" {
   // functions for creating/modifying `trie`
   TrieNode* create_node();

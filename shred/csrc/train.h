@@ -3,20 +3,7 @@
 #define __TRAIN__H__
 
 #include "base.h"
-
-typedef struct TokenPairs {
-  int first, second;
-} TokenPairs;
-
-typedef struct VocabEntry {
-  int idx;
-  char* value;
-} VocabEntry;
-
-typedef struct MergeEntry {
-  TokenPairs pair;
-  int idx;
-} MergeEntry;
+#include "heap.h"
 
 extern "C" {
   void train_vocab_bpe(const char* train_file, const char* vocab_file, int merge_steps);

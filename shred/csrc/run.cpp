@@ -1,7 +1,7 @@
 /*
   @run.cpp
   * main run file for testing the BPE trie-based tokenizer and vocab training
-  * compile as: g++ -o run run.cpp base.cpp train.cpp -std=c++11
+  * compile as: g++ -o run run.cpp heap.cpp base.cpp train.cpp -std=c++11
     - run: ./run
 */
 
@@ -12,6 +12,7 @@
 #include <time.h>
 #include "base.h"
 #include "train.h"
+#include "heap.h"
 
 // read the entire content of a file into a string
 char* read_file(const char* filename) {
@@ -42,14 +43,14 @@ int main() {
 
   printf("Training vocabulary from %s...\n", train_file);
   time_t start_time = time(NULL);
-  train_vocab(train_file, vocab_file, 1000);
+  train_vocab_bpe(train_file, vocab_file, 300);
   time_t end_time = time(NULL);
   printf("Vocabulary training complete in %.2lf seconds.\n", difftime(end_time, start_time));
 
   printf("Printing vocabulary from %s...\n", vocab_file);
   TrieNode* vocab = create_node();
-  load_vocab(vocab, vocab_file);
-  print_trie(vocab);
+  // load_vocab(vocab, vocab_file);
+  // print_trie(vocab);
   free_trie(vocab);
 
   return 0;
