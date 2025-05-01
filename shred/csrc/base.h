@@ -8,19 +8,16 @@
 #ifndef __BASE__H__
 #define __BASE__H__
 
-#include <cstddef>
-#include <ctype.h>
-
-#define NUM_CHARS 256
-#define MAX_LINE_LENGTH 1024
-#define MAX_TOKENS 1000000
-#define MAX_SEQ_LENGTH 4096
-#define MAX_SYMBOL_LEN 32
+#define NUM_CHARS 256   // Maximum initial letters, since UTF-8 so 256
+#define MAX_LINE_LENGTH 1024  // Max length of line to be read
+#define MAX_TOKENS 1000000   // Max tokens to be trained
+#define MAX_SEQ_LENGTH 4096   // BUffer length for loading sentences
+#define MIN_SYMBOL_LEN 32   // Symbols size (to be increased dynamically)
 
 typedef struct TrieNode {
   struct TrieNode *children[NUM_CHARS];
   bool terminal;
-} TrieNode;
+} TrieNode;   // Trie-based dtype to store possible vocabs
 
 extern "C" {
   // functions for creating/modifying `trie`

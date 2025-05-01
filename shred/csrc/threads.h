@@ -1,12 +1,8 @@
 #ifndef __THREADS__H__
 #define __THREADS__H__
 
-#include <pthread.h>
-#include <stdlib.h>
-#include <string.h>
-#include "inc/khash.h"
 #include <stdint.h>
-#include "train.h"
+#include "inc/khash.h"
 
 KHASH_MAP_INIT_STR(str_int, int)  // Map from char* to int
 KHASH_MAP_INIT_STR(pair_int, int) // Map from pair string ("A\0B") to int
@@ -14,8 +10,7 @@ KHASH_MAP_INIT_STR(pair_int, int) // Map from pair string ("A\0B") to int
 static khash_t(str_int)* sym2id;
 static char** id2sym;
 static int sym_capacity;
-static int sym_count;  
-void initialize_threads();
+static int sym_count;
 
 // pairID = (A_id << 32) | B_id
 static inline uint64_t pack_pair(int A, int B) {
@@ -35,8 +30,10 @@ typedef struct {
 } ThreadArg;
 
 extern "C" {
-  int get_max_threads();
-  void* thread_count_pairs(void* _arg);
+  void initialize_threads();  // initializes threads for training
+  int get_max_threads();  // returns the max no of threads
+
+  void* thread_count_pairs(void* _arg);  // training stats counting worker
 }
 
-#endif  //!__THREADS__H__
+#endif

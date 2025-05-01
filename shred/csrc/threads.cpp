@@ -1,10 +1,7 @@
-#include <stdlib.h>
 #include <stdio.h>
-#include <string.h>
-#include "threads.h"
+#include <pthread.h>
 #include "train.h"
-#include "base.h"
-#include "heap.h"
+#include "threads.h"
 
 #ifdef _WIN32
   #include <windows.h>

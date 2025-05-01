@@ -2,8 +2,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include "base.h"
-#include "threads.h"
-#include "heap.h"
 
 TrieNode* create_node() {
   TrieNode* node = (TrieNode*)malloc(sizeof(TrieNode));
@@ -47,7 +45,7 @@ int longest_prefix(TrieNode* root, const char* text) {
   return max_len;
 }
 
-void print_trie_recursively(TrieNode* node, unsigned char *prefix, int length) {
+void _print_trie(TrieNode* node, unsigned char *prefix, int length) {
   unsigned char newprefix[length+2];
   memcpy(newprefix, prefix, length);
   newprefix[length+1] = 0;
@@ -59,7 +57,7 @@ void print_trie_recursively(TrieNode* node, unsigned char *prefix, int length) {
   for (int i = 0; i < NUM_CHARS; i++) {
     if (node->children[i] != NULL) {
       newprefix[length] = i;
-      print_trie_recursively(node->children[i], newprefix, length+1);
+      _print_trie(node->children[i], newprefix, length+1);
     }
   }
 }
@@ -69,7 +67,7 @@ void print_trie(TrieNode* node) {
     fprintf(stderr, "Error: Invaild Trie-Node to print.\n");
     exit(EXIT_FAILURE);
   }
-  print_trie_recursively(node, NULL, 0);
+  _print_trie(node, NULL, 0);
 }
 
 void free_trie(TrieNode* node) {
@@ -102,7 +100,7 @@ int split_to_symbols(const char* line, char*** out_symbols) {
         else if ((c & 0xF0) == 0xE0) len = 3;
         else if ((c & 0xF8) == 0xF0) len = 4;
       }
-      char temp[MAX_SYMBOL_LEN];
+      char temp[MIN_SYMBOL_LEN];
       strncpy(temp, line + i, len);
       temp[len] = '\0';
       symbols[n++] = strdup(temp);
@@ -138,6 +136,7 @@ void load_and_split(const char* train_file, char**** out_symbols, int** out_lens
   fclose(f);
   printf("[DEBUG] total lines: %d\n", corpus_size);
 
+  // allocating the new computed values to each of the respective variable
   *out_symbols = seq_syms;
   *out_lens = seq_lens;
   *out_size = corpus_size;
@@ -158,6 +157,15 @@ static void _save(TrieNode* n, FILE* f, char* buf, int depth) {
 }
 
 void save_vocab(TrieNode* root, const char* vocab_file) {
+  if (!root) {
+    fprintf(stderr, "Error: Trie pointer is null.\n");
+    exit(EXIT_FAILURE);
+  }
+  if (!vocab_file) {
+    fprintf(stderr, "Error: vocab_file pointer is null.\n");
+    exit(EXIT_FAILURE);
+  }
+
   FILE* f = fopen(vocab_file, "w");
   if (!f) { perror(vocab_file); return; }
   char buf[1024];

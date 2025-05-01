@@ -174,7 +174,7 @@ void train_vocab_bpe(const char* train_file, const char* vocab_file, int merge_s
   for (int step = 0; step < merge_steps && !heap_empty(&heap); step++) {
     HeapEntry he = heap_pop(&heap);
     char *A = strtok(he.key, "\t"), *B = strtok(NULL, "\t");
-    char merged[MAX_SYMBOL_LEN*2];
+    char merged[MIN_SYMBOL_LEN * 2];
     snprintf(merged, sizeof(merged), "%s%s", A, B);
     printf("[DEBUG] Merge %d: %s+%s (%d)\n", step+1, A, B, he.freq);
     free(he.key);
@@ -215,7 +215,7 @@ void train_vocab_bpe(const char* train_file, const char* vocab_file, int merge_s
       // recount pairs
       for (int i = 0; i < corpus_size; i++) {
         for (int j = 0; j + 1 < seq_lens[i]; j++) {
-          char key2[MAX_SYMBOL_LEN*2 + 2];
+          char key2[MIN_SYMBOL_LEN * 2 + 2];
           snprintf(key2, sizeof(key2), "%s\t%s", seq_syms[i][j], seq_syms[i][j+1]);
           int ret; khiter_t kk = kh_put(pair_int, pc, strdup(key2), &ret);
           kh_val(pc, kk)++;

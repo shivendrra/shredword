@@ -1,15 +1,13 @@
 #ifndef __HEAP__H__
 #define __HEAP__H__
 
-#include "base.h"
-
 typedef struct {
   char* a; // first symbol
   char* b; // second symbol
 } PairKey;
 
 typedef struct {
-  char* key;
+  char* key;  // single character or maybe merged
   int freq;
 } HeapEntry; // An entry in the heap
 

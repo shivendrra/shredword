@@ -1,10 +1,6 @@
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <assert.h>
 #include "heap.h"
-#include "base.h"
-#include "train.h"
 
 // swap two heap entries
 static void he_swap(HeapEntry* x, HeapEntry* y) {
