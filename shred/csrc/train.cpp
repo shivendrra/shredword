@@ -1,13 +1,30 @@
 #include <cstring>
-#include <cstdlib>
-#include <cstdio>
-#include "inc/khash.h"
+#include <stdlib.h>
+#include <stdio.h>
+#include <pthread.h>
+#include <stdatomic.h>
 #include "train.h"
 #include "base.h"
 #include "heap.h"
+#include "threads.h"
+#include "inc/khash.h"
 
-KHASH_MAP_INIT_STR(str_int, int)  // Map from char* to int
-KHASH_MAP_INIT_STR(pair_int, int) // Map from pair string ("A\0B") to int
+static char* my_strndup(const char* s, size_t n) {
+  char* p = (char*)malloc(n+1);
+  memcpy(p, s, n);
+  p[n] = '\0';
+  return p;
+}
+
+// Fallback atomics using GCC built-ins
+static inline int atomic_fetch_add_int(int *ptr, int val) {
+  return __sync_fetch_and_add(ptr, val);
+}
+
+static inline void atomic_store_int(int *ptr, int val) {
+  // full barrier store
+  __sync_lock_test_and_set(ptr, val);
+}
 
 static int trie_count_words(TrieNode* node) {
   if (!node) return 0;
@@ -18,37 +35,24 @@ static int trie_count_words(TrieNode* node) {
   return count;
 }
 
-// Read a line, split on U+2581 marker into symbols array
-static int split_to_symbols(const char* line, char*** out_symbols) {
-  // worst case every byte is a separate UTF-8 symbol → allocate MAX_SEQ_LENGTH pointers
-  char** symbols = (char**)malloc(sizeof(char*) * MAX_SEQ_LENGTH);
-  int n = 0, i = 0, L = strlen(line);
-  while (i < L) {
-    // detect marker 0xE2 0x96 0x81
-    if (i+2 < L && (unsigned char)line[i] == 0xE2 && (unsigned char)line[i+1] == 0x96 && (unsigned char)line[i+2] == 0x81) {
-      symbols[n++] = strdup("▁");
-      i += 3;
-    } else {
-      // grabing one UTF-8 codepoint
-      int len = 1;
-      unsigned char c = line[i];
-      if (c >= 0xC0) {
-        if ((c & 0xE0) == 0xC0) len = 2;
-        else if ((c & 0xF0) == 0xE0) len = 3;
-        else if ((c & 0xF8) == 0xF0) len = 4;
-      }
-      char temp[MAX_SYMBOL_LEN];
-      strncpy(temp, line + i, len);
-      temp[len] = '\0';
-      symbols[n++] = strdup(temp);
-      i += len;
-    }
+int get_symbol_id(const char* sym) {
+  khiter_t k = kh_get(str_int, sym2id, sym);
+  if (k != kh_end(sym2id)) return kh_val(sym2id, k);
+  // new symbol
+  int id = atomic_fetch_add_int(&sym_count, 1);
+  if (id + 1 > sym_capacity) {
+    int nc = sym_capacity * 2;
+    id2sym = (char**)realloc(id2sym, sizeof(char*) * nc);
+    sym_capacity = nc;
   }
-  *out_symbols = symbols;
-  return n;
+  id2sym[id] = strdup(sym);
+  int ret;
+  k = kh_put(str_int, sym2id, strdup(sym), &ret);
+  kh_val(sym2id, k) = id;
+  return id;
 }
 
-void train_vocab(const char* train_file, const char* vocab_file, int vocab_limit) {
+void train_vocab_naive(const char* train_file, const char* vocab_file, int vocab_limit) {
   TrieNode* root = create_node();
   FILE* test = fopen(vocab_file, "r");
   if (test) { fclose(test); load_vocab(root, vocab_file); }
@@ -133,7 +137,7 @@ void train_vocab_bpe(const char* train_file, const char* vocab_file, int merge_s
     }
     seq_lens[corpus_size] = split_to_symbols(buf, &seq_syms[corpus_size]);
     corpus_size++;
-    if (corpus_size % 10000 == 0) {
+    if (corpus_size % 100000 == 0) {
       printf("[DEBUG] read %d lines\n", corpus_size);
     }
   }
@@ -146,7 +150,7 @@ void train_vocab_bpe(const char* train_file, const char* vocab_file, int merge_s
   khash_t(pair_int)* pc = kh_init(pair_int);
   for (int i = 0; i < corpus_size; i++) {
     for (int j = 0; j + 1 < seq_lens[i]; j++) {
-      char key[MAX_SYMBOL_LEN*2 + 2];
+      char key[256];  // plenty for 2 merged symbols and a tab
       snprintf(key, sizeof(key), "%s\t%s", seq_syms[i][j], seq_syms[i][j+1]);
       int ret;
       khiter_t k = kh_put(pair_int, pc, strdup(key), &ret);
@@ -171,7 +175,6 @@ void train_vocab_bpe(const char* train_file, const char* vocab_file, int merge_s
     HeapEntry he = heap_pop(&heap);
     char *A = strtok(he.key, "\t"), *B = strtok(NULL, "\t");
     char merged[MAX_SYMBOL_LEN*2];
-    
     snprintf(merged, sizeof(merged), "%s%s", A, B);
     printf("[DEBUG] Merge %d: %s+%s (%d)\n", step+1, A, B, he.freq);
     free(he.key);
@@ -251,4 +254,129 @@ void train_vocab_bpe(const char* train_file, const char* vocab_file, int merge_s
   kh_destroy(pair_int, pc);
 
   printf("[DEBUG] bpe learning complete.\n");
+}
+
+void train_bpe_fast(const char* train_file, const char* vocab_file, int merge_steps, int num_threads) {
+  printf("[FAST BPE] loading & splitting corpus...\n");
+  char*** seq_syms;
+  int* seq_lens;
+  int corpus_size;
+  load_and_split(train_file, &seq_syms, &seq_lens, &corpus_size);
+
+  printf("[FAST BPE] initializing symbol tables...\n");
+  sym_capacity = 1024;
+  id2sym = (char**)malloc(sizeof(char*)*sym_capacity);
+  sym2id = kh_init(str_int);
+  atomic_store_int(&sym_count, 0);
+  
+  // 1) parallel map
+  pthread_t* threads = (pthread_t*)malloc(sizeof(pthread_t) * num_threads);
+  ThreadArg* args = (ThreadArg*)malloc(sizeof(ThreadArg) * num_threads);
+  for (int t = 0; t < num_threads; t++) {
+    args[t] = (ThreadArg){t,num_threads,(char*)train_file, seq_syms, seq_lens, corpus_size, NULL};
+    pthread_create(&threads[t], NULL, thread_count_pairs, &args[t]);
+  }
+  khash_t(pair_int)* global_map = kh_init(pair_int);
+  for (int t = 0; t < num_threads; t++) {
+    pthread_join(threads[t], NULL);
+    // reduce
+    khash_t(pair_int)* m = args[t].local_map;
+    for (khiter_t k = kh_begin(m); k != kh_end(m); k++) {
+      if (!kh_exist(m,k)) continue;
+      const char* pk = kh_key(m,k);
+      int v = kh_val(m,k);
+      int ret;
+      khiter_t g = kh_put(pair_int, global_map, strdup(pk), &ret);
+      kh_val(global_map, g) += v;
+    }
+    // free(&pk); this is a wrong step, it was never malloc()'ed
+    for (khiter_t k = kh_begin(m); k != kh_end(m); k++) {
+      if (!kh_exist(m, k)) continue;
+      free((char*)kh_key(m, k)); // safe now - since, we’re not iterating further
+    }
+    kh_destroy(pair_int, m);
+  }
+  free(threads);
+  free(args);
+
+  // 2) build heap
+  MaxHeap heap;
+  int initial = kh_size(global_map);
+  if (initial < 1) initial = 1;
+  heap_init(&heap, initial);
+  for (khiter_t k = kh_begin(global_map); k != kh_end(global_map); k++) {
+    if (!kh_exist(global_map,k)) continue;
+    uint64_t p; memcpy(&p, kh_key(global_map,k), sizeof(p));
+    char* key_copy = my_strndup((char*)&p,8);
+    heap_push(&heap, key_copy, kh_val(global_map,k));
+  }
+
+  // 3) merges (serial for clarity; can parallelize similar to map)
+  TrieNode* root = create_node();
+  for (int step = 0; step < merge_steps && !heap_empty(&heap); step++) {
+    HeapEntry he = heap_pop(&heap);
+    uint64_t p;
+    memcpy(&p, he.key, sizeof(p));
+    
+    int A,B;
+    unpack_pair(p,&A,&B);
+    char *symA = id2sym[A], *symB = id2sym[B];
+    size_t lenA = strlen(symA), lenB = strlen(symB);
+    char* merged_str = (char*)malloc(lenA + lenB + 1);
+    if (!merged_str) {
+      perror("malloc merged_str");
+      exit(1);
+    }
+    // build merged symbol
+    memcpy(merged_str, symA, lenA);
+    memcpy(merged_str + lenA, symB, lenB + 1);  // includes '\0'
+
+    snprintf(merged_str, lenA + lenB + 1, "%s%s", symA, symB);
+    int AB = get_symbol_id(merged_str);
+    printf("[FAST BPE] Merge %d: %s+%s (%d)\n", step+1, symA, symB, he.freq);
+    free(he.key);
+
+    // apply only neighbor updates
+    // .... A B C .... --> .... AB C ....
+    // remove count of A+B, remove count of B+C, & add count of AB+C
+    for (int i = 0; i < corpus_size; i++) {
+      int L = seq_lens[i];
+      char** seq = seq_syms[i];
+    
+      // allocate a new sequence with same or fewer tokens
+      char** new_seq = (char**)malloc(sizeof(char*) * L);
+      int new_len = 0;
+    
+      for (int j = 0; j < L; j++) {
+        if (j + 1 < L && strcmp(seq[j], symA) == 0 && strcmp(seq[j + 1], symB) == 0) {
+          // match found → replace A+B with merged
+          new_seq[new_len++] = strdup(id2sym[AB]);
+          j++;  // skip B
+        } else {
+          new_seq[new_len++] = strdup(seq[j]);
+        }
+      }
+    
+      // cleanup old seq
+      for (int j = 0; j < L; j++) free(seq[j]);
+      free(seq);
+    
+      // store new
+      seq_syms[i] = new_seq;
+      seq_lens[i] = new_len;
+    }
+
+    free(merged_str);
+  }
+
+  // 4) insert into trie & save
+  for (int i = 0; i < sym_count; i++) trie_insert(root, id2sym[i]);
+  save_vocab(root, vocab_file);
+  free_trie(root);
+
+  // cleanup
+  heap_free(&heap);
+  for (khiter_t k = kh_begin(global_map); k != kh_end(global_map); k++)
+    if (kh_exist(global_map,k)) free((char*)kh_key(global_map,k));
+  kh_destroy(pair_int, global_map);
 }

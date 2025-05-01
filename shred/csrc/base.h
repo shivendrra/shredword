@@ -30,6 +30,9 @@ extern "C" {
   void free_trie(TrieNode* node);   // freeing the trie from the memory
   void print_trie(TrieNode* node);  // prints all the nodes recursively
 
+  int split_to_symbols(const char* line, char*** out_symbols);
+  void load_and_split(const char* train_file, char**** out_symbols, int** out_lens, int* out_size);
+
   // function for loading/saving vocabs
   void save_vocab(TrieNode* root, const char* file_prefix);
   void load_vocab(TrieNode* root, const char* model_file);
