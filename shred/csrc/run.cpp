@@ -44,7 +44,7 @@ int main() {
   printf("Training vocabulary from %s...\n", train_file);
   time_t start_time = time(NULL);
   // train_vocab_bpe(train_file, vocab_file, 300);
-  train_bpe_fast(train_file, vocab_file, 300, 3);
+  train_bpe_fast(train_file, vocab_file, 300);
   time_t end_time = time(NULL);
   printf("Vocabulary training complete in %.2lf seconds.\n", difftime(end_time, start_time));
 

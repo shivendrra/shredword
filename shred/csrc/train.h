@@ -9,7 +9,7 @@
 extern "C" {
   void train_vocab_bpe(const char* train_file, const char* vocab_file, int merge_steps);
   void train_vocab_naive(const char* train_file, const char* vocab_file, int vocab_limit);
-  void train_bpe_fast(const char* train_file, const char* vocab_file, int merge_steps, int num_threads);
+  void train_bpe_fast(const char* train_file, const char* vocab_file, int merge_steps);
 
   int get_symbol_id(const char* sym);
 }

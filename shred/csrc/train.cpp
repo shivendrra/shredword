@@ -256,7 +256,7 @@ void train_vocab_bpe(const char* train_file, const char* vocab_file, int merge_s
   printf("[DEBUG] bpe learning complete.\n");
 }
 
-void train_bpe_fast(const char* train_file, const char* vocab_file, int merge_steps, int num_threads) {
+void train_bpe_fast(const char* train_file, const char* vocab_file, int merge_steps) {
   printf("[FAST BPE] loading & splitting corpus...\n");
   char*** seq_syms;
   int* seq_lens;
@@ -270,30 +270,68 @@ void train_bpe_fast(const char* train_file, const char* vocab_file, int merge_st
   atomic_store_int(&sym_count, 0);
   
   // 1) parallel map
+  initialize_threads(); // initializing threads first
+  int num_threads = get_max_threads();
   pthread_t* threads = (pthread_t*)malloc(sizeof(pthread_t) * num_threads);
   ThreadArg* args = (ThreadArg*)malloc(sizeof(ThreadArg) * num_threads);
   for (int t = 0; t < num_threads; t++) {
-    args[t] = (ThreadArg){t,num_threads,(char*)train_file, seq_syms, seq_lens, corpus_size, NULL};
+    args[t] = (ThreadArg){t,(char*)train_file, seq_syms, seq_lens, corpus_size, NULL};
     pthread_create(&threads[t], NULL, thread_count_pairs, &args[t]);
+  }
+  printf("[DEBUG] corpus_size = %d\n", corpus_size);
+  for (int i = 0; i < 10; i++) {
+    printf("[DEBUG] line %d symbol count = %d\n", i, seq_lens[i]);
+    for (int j = 0; j < seq_lens[i]; j++) {
+      if (seq_syms[i][j] == NULL) {
+        printf("[ERROR] NULL symbol at seq_syms[%d][%d]\n", i, j);
+      } else {
+        printf("  %s", seq_syms[i][j]);
+      }
+    }
+    printf("\n");
   }
   khash_t(pair_int)* global_map = kh_init(pair_int);
   for (int t = 0; t < num_threads; t++) {
-    pthread_join(threads[t], NULL);
-    // reduce
+    pthread_join(threads[t], NULL); // wait for thread t
+
+    // reduce this thread’s local map
     khash_t(pair_int)* m = args[t].local_map;
     for (khiter_t k = kh_begin(m); k != kh_end(m); k++) {
-      if (!kh_exist(m,k)) continue;
-      const char* pk = kh_key(m,k);
-      int v = kh_val(m,k);
+      if (!kh_exist(m, k)) continue;
+      const char* pk = kh_key(m, k);
+      int v = kh_val(m, k);
+
+      // interpret the 8‐byte key as an integer for logging
+      uint64_t raw_pair;
+      memcpy(&raw_pair, pk, sizeof(uint64_t));
+
+      // duplicate raw binary key (8 bytes) + null
+      char* key_copy = (char*)malloc(sizeof(uint64_t) + 1);
+      if (!key_copy) {
+        fprintf(stderr, "[ERROR] malloc failed for key_copy in thread %d\n", t);
+        exit(EXIT_FAILURE);
+      }
+      memcpy(key_copy, pk, sizeof(uint64_t));
+      key_copy[sizeof(uint64_t)] = '\0';
+
       int ret;
-      khiter_t g = kh_put(pair_int, global_map, strdup(pk), &ret);
+      khiter_t g = kh_put(pair_int, global_map, key_copy, &ret);
+      if (ret < 0) {
+        fprintf(stderr, "[ERROR] kh_put failed for key_copy in thread %d\n", t);
+        exit(EXIT_FAILURE);
+      }
       kh_val(global_map, g) += v;
     }
-    // free(&pk); this is a wrong step, it was never malloc()'ed
+
+    // free all keys in this local map
     for (khiter_t k = kh_begin(m); k != kh_end(m); k++) {
       if (!kh_exist(m, k)) continue;
-      free((char*)kh_key(m, k)); // safe now - since, we’re not iterating further
+      const char* pk = kh_key(m, k);
+      uint64_t raw_pair;
+      memcpy(&raw_pair, pk, sizeof(uint64_t));
+      free((char*)pk);
     }
+
     kh_destroy(pair_int, m);
   }
   free(threads);
