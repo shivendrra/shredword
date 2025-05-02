@@ -45,6 +45,18 @@ int longest_prefix(TrieNode* root, const char* text) {
   return max_len;
 }
 
+int trie_count_words(TrieNode* node) {
+  if (node == NULL) {
+    fprintf(stderr, "Error: TrieNode pointer is NULL.\n");
+    exit(EXIT_FAILURE);
+  }
+  int count = node->terminal ? 1 : 0;
+  for (int i = 0; i < NUM_CHARS; ++i) {
+    count += trie_count_words(node->children[i]);
+  }
+  return count;
+}
+
 void _print_trie(TrieNode* node, unsigned char *prefix, int length) {
   unsigned char newprefix[length+2];
   memcpy(newprefix, prefix, length);
