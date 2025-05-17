@@ -83,7 +83,7 @@ void bpe_trainer_destroy(BpeTrainer* trainer) {
   free(trainer);
 }
 
-int bpe_load_corpus(BpeTrainer* trainer, const char* input_path) {
+int bpe_loadCorpus(BpeTrainer* trainer, const char* input_path) {
   if (!trainer || !input_path) {
     fprintf(stderr, "Trainer pointer or Input path pointer is NULL!\n");
     exit(EXIT_FAILURE);
@@ -136,4 +136,64 @@ int bpe_load_corpus(BpeTrainer* trainer, const char* input_path) {
 // --- Return the current version for a bigram key. Used by heap_pop to skip stale entries ---
 uint32_t bpe_get_current_version(PairKey key) {
   return bimap_version(&bigram_map, key);
+}
+
+// --- initializes the bpe trainer & populate the heap with frequencies from
+// normalized loaded corpus ---
+void bpe_initialize(BpeTrainer* trainer) {
+  if (!trainer) {
+    fprintf(stderr, "Trainer pointer is NULL!\n");
+    exit(EXIT_FAILURE);
+  }
+  // clearing the bigram map first & then initializing
+  bimap_free(&bigram_map);
+  bimap_init(&bigram_map, MIN_HEAP_SIZE);
+
+  // clearing the heap first & then initializing
+  heap_free(&trainer->heap);
+  heap_init(&trainer->heap, MIN_HEAP_SIZE);
+
+  // counting all bigrams
+  bpe_count_bigrams(trainer);
+}
+
+void bpe_count_bigrams(BpeTrainer* trainer) {
+  if (!trainer) {
+    fprintf(stderr, "Trainer pointer is NULL!\n");
+    exit(EXIT_FAILURE);
+  }
+
+  size_t V = trainer->corpus.vocab_size;
+  for (size_t wi = 0; wi < V; ++wi) {
+    Symbol* s = trainer->corpus.words[wi];
+    uint64_t wcount = trainer->corpus.word_counts[wi];
+
+    while(s && s->next) {
+      PairKey key = { s->id, s->next->id };
+      Info *info = bigram_map_get(&bigram_map, key);
+      
+      // grow positions array if needed
+      if (info->pos_size == info->pos_capacity) {
+        size_t new_capactiy = info->pos_capacity ? info->pos_capacity * 2 : 4;
+        info->positions = (wordPos*)realloc(info->positions, new_capactiy * sizeof(wordPos));
+        info->pos_capacity = new_capactiy;
+      }
+
+      // record this occurances
+      info->positions[info->pos_size].word_index = wi;
+      info->positions[info->pos_size].pos = s;
+      info->pos_size++;
+      info->freq += wcount; // accumulate the freq
+      heap_push(&trainer->heap, key, info->freq, info->version);  // pusing the item into heap
+      s = s->next;   // proceed
+    }
+  }
+}
+
+// --- merges the max frequencey pairs, updates only the neighbours & returns the merged idx ---
+int bpe_merge(BpeTrainer* trainer) {
+  if(!trainer) {
+    fprintf(stderr, "Trainer pointer is NULL!\n");
+    exit(EXIT_FAILURE);
+  }
 }

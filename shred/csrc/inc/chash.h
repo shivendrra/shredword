@@ -21,7 +21,7 @@ typedef struct StrEntry {
 
 typedef struct {
   StrEntry **buckets;
-  size_t     nbuckets;
+  size_t nbuckets;
 } StrMap;
 
 // --- Initialize a string map with given bucket count (power of two) ---
@@ -87,10 +87,12 @@ typedef struct {
   int32_t first, second;
 } PairKey;
 
-typedef struct {
-  uint64_t freq;
-  uint32_t version;
-  // positions[] etc. managed elsewhere
+typedef struct Info {
+  uint64_t freq;   // frequency of a particular pair
+  wordPos* positions;   // dynamic Array of occurances
+  size_t pos_capacity;   // capacity of pos[]
+  size_t pos_size;  // current no of occurances
+  uint32_t version;   // version for lazy validation
 } Info;
 
 typedef struct BIEntry {
@@ -112,7 +114,7 @@ static inline void bimap_init(BIMap *m, size_t nbuckets) {
 }
 
 // --- Retrieve or create an Info* for a given bigram key ---
-static inline Info* bimap_get(BIMap *m, PairKey key) {
+static inline Info* bigram_map_get(BIMap *m, PairKey key) {
   uint32_t h = ((uint32_t)key.first * 9973) ^ (uint32_t)key.second;
   size_t idx = h & (m->nbuckets - 1);
 
