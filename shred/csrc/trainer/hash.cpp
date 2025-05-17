@@ -20,7 +20,7 @@ void strmap_increment(StrMap* map, const char* key) {
     fprintf(stderr, "Pointer to Map not found!\n");
     exit(EXIT_FAILURE);
   }
-  
+  // djb2 hash
   size_t h = 5381;
   for (const unsigned char* s = (const unsigned char*)key; *s; s++) {
     h = ((h << 5) + h) + *s;
@@ -35,9 +35,10 @@ void strmap_increment(StrMap* map, const char* key) {
     p = &(*p)->next;
   }
   StrEntry* e = (StrEntry*)malloc(sizeof(StrEntry));
-  (*p)->key = strdup(key);
-  (*p)->value = 1;
-  (*p)->next = NULL;
+  e->key = strdup(key);
+  e->value = 1;
+  e->next = NULL;
+  *p = e;
 }
 
 /**
@@ -60,7 +61,7 @@ void strmap_iter(StrMap* map, void(*func)(const char*, uint64_t, void*), void* u
 }
 
 // --- Free all resources held by the map ---
-static inline void strmap_free(StrMap *map) {
+void strmap_free(StrMap *map) {
   if (!map) {
     fprintf(stderr, "Pointer to Map not found!\n");
     exit(EXIT_FAILURE);
@@ -85,11 +86,11 @@ void bimap_init(BIMap* map, size_t nbuckets) {
     exit(EXIT_FAILURE);
   }
   map->nbuckets = nbuckets;
-  map->buckets = (BIEntry**)(nbuckets, sizeof(BIEntry*));
+  map->buckets = (BIEntry**)calloc(nbuckets, sizeof(BIEntry*));
 }
 
 // --- Retrieve or create an Info* for a given bigram key ---
-Info* bigram_map_get(BIMap* map, PairKey key) {
+Info* bimap_get(BIMap* map, PairKey key) {
   if (!map) {
     fprintf(stderr, "Pointer to Map not found!\n");
     exit(EXIT_FAILURE);
@@ -101,17 +102,16 @@ Info* bigram_map_get(BIMap* map, PairKey key) {
   BIEntry **bucket = &map->buckets[idx];
   while (*bucket) {
     if ((*bucket)->key.first  == key.first &&
-        (*bucket)->key.second == key.second)
+        (*bucket)->key.second == key.second) {
       return &(*bucket)->info;
+    }
     bucket = &(*bucket)->next;
   }
 
   // not found -> allocate and link new entry
-  BIEntry *entry = (BIEntry*)malloc(sizeof(BIEntry));
+  BIEntry *entry = (BIEntry*)calloc(1, sizeof(BIEntry));  // zeros all fields
   entry->key.first = key.first;
   entry->key.second = key.second;
-  entry->info.freq = 0;
-  entry->info.version = 0;
   entry->next = NULL;
 
   *bucket = entry;

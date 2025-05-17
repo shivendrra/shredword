@@ -30,7 +30,19 @@ typedef struct {
   int num_threads;    // threads for initial counting
 } BPEConfig;
 
-typedef struct BpeTrainer BpeTrainer;   // for handling the training part
+typedef struct BpeTrainer {
+  BPEConfig config;   // user-settings
+  MaxHeap heap;   // bigram merge items
+  Corpus corpus;    // word-> countmap & symbol chains
+  BIMap bigram_map;  // global bigram→Info map
+  size_t next_token_id; // next unused subword ID (starts at initial vocab size)
+  size_t initial_vocab_size;
+  size_t num_merges;    // how many merges have been applied
+  PairKey *merge_ops;     // array of length num_merges
+  char **token_strs;    // maps token ID -> UTF‑8 string
+  uint64_t *token_freqs;   // maps token ID -> frequency
+} BpeTrainer;   // for handling the training part
+
 static BIMap bigram_map;  // global bigram→Info map for lazy invalidation
 
 extern "C" {
@@ -43,7 +55,7 @@ extern "C" {
   void bpe_count_bigrams(BpeTrainer* trainer);
   int bpe_merge(BpeTrainer* trainer);
   int bpe_train(BpeTrainer* trainer);
-  int bpe_save(const BpeTrainer* trainer, const char* model_path, const char* vocab_path);
+  void bpe_save(const BpeTrainer* trainer, const char* model_path, const char* vocab_path);
 }
 
 

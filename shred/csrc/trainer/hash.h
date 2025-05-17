@@ -4,7 +4,6 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include "bpe.h"
 
 typedef struct StrEntry {
   char* key;  // string or character
@@ -20,6 +19,8 @@ typedef struct StrMap {
 typedef struct PairKey {
   int32_t first, second;
 } PairKey;
+
+typedef struct wordPos wordPos;
 
 typedef struct Info {
   uint64_t freq;   // frequency of a particular pair
@@ -49,7 +50,7 @@ extern "C" {
 
   // BiGram Hash related functions ----
   void bimap_init(BIMap *m, size_t nbuckets);
-  Info* bigram_map_get(BIMap *m, PairKey key);
+  Info* bimap_get(BIMap *m, PairKey key);
   uint32_t bimap_version(const BIMap* map, PairKey key);
   void bimap_free(BIMap *map);
 }
