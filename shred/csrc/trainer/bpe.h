@@ -28,6 +28,8 @@ typedef struct {
   size_t target_vocab;    // desired vocab_size
   int32_t unk_id;   // ID to use for unknown tokens
   int num_threads;    // threads for initial counting
+  double  character_coverage;   // e.g. 0.995
+  uint64_t min_pair_freq;       // e.g. 5
 } BPEConfig;
 
 typedef struct BpeTrainer {

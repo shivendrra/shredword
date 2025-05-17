@@ -299,48 +299,43 @@ void bpe_save(const BpeTrainer *trainer, const char *model_path, const char *voc
   size_t initV = trainer->initial_vocab_size;
   size_t M = trainer->num_merges;
   size_t total = initV + M;
-  printf("[DEBUG] initV=%zu, merges=%zu, total_tokens=%zu\n", initV, M, total);
+  printf("initial_vocab=%zu, merges=%zu, total_tokens=%zu\n", initV, M, total);
 
-  if (!trainer->merge_ops) {
-    fprintf(stderr, "Save Model: No merges recorded!\n");
+  if (M == 0 || !trainer->merge_ops) {
+    fprintf(stderr, "bpe_save: no merges recorded!\n");
     exit(EXIT_FAILURE);
   }
-  // build tokeni->freq & token->strs if absent
-  char **strs  = trainer->token_strs;
-  uint64_t *freqs = trainer->token_freqs;
 
+  // allocating local arrays
+  char** strs = (char**)calloc(total, sizeof(char *));
+  uint64_t* freqs = (uint64_t*)calloc(total, sizeof(uint64_t));
   if (!strs || !freqs) {
-    printf("[DEBUG] Allocating token_strs and token_freqs arrays\n");
-    strs  = (char**)calloc(total, sizeof(char*));
-    freqs = (uint64_t*)calloc(total, sizeof(uint64_t));
-    if (!strs || !freqs) {
-      fprintf(stderr, "Save Model: OOM allocating vocab arrays.\n");
-      free(strs); free(freqs);
-      exit(EXIT_FAILURE);
-    }
-    // filling initial bytes
-    for (size_t id = 0; id < initV; ++id) {
-      strs[id]  = (char*)malloc(2);
-      strs[id][0] = (char)id;
-      strs[id][1] = '\0';
-      freqs[id] = 1;  // or trainer->char_counts[id] if you have it
-    }
-
-    // filling merged tokens by concat two operand strings
-    for (size_t i = 0; i < M; ++i) {
-      PairKey op = trainer->merge_ops[i];
-      size_t new_id = initV + i;
-      const char *a = strs[op.first];
-      const char *b = strs[op.second];
-      size_t la = strlen(a), lb = strlen(b);
-      strs[new_id] = (char*)malloc(la + lb + 1);
-      memcpy(strs[new_id], a, la);
-      memcpy(strs[new_id] + la, b, lb + 1);
-      // freq: you could record the final Info.freq here if you tracked it
-      freqs[new_id] = 1;
-    }
+    fprintf(stderr, "bpe_save: OOM allocating vocab arrays\n");
+    exit(EXIT_FAILURE);
   }
-  // Writing vocabulary file
+
+  // filling initial byte tokens
+  for (size_t id = 0; id < initV; ++id) {
+    strs[id] = (char*)malloc(2);
+    strs[id][0] = (char)id;
+    strs[id][1] = '\0';
+    freqs[id] = 1;
+  }
+
+  // filling merged tokens
+  for (size_t i = 0; i < M; ++i) {
+    PairKey op = trainer->merge_ops[i];
+    size_t new_id = initV + i;
+    const char* a = strs[op.first];
+    const char* b = strs[op.second];
+    size_t la = strlen(a), lb = strlen(b);
+    strs[new_id] = (char*)malloc(la + lb + 1);
+    memcpy(strs[new_id], a, la);
+    memcpy(strs[new_id]+la, b, lb+1);
+    freqs[new_id] = 1;
+  }
+
+  // write vocab file
   printf("[DEBUG] Writing vocab to %s\n", vocab_path);
   FILE *vf = fopen(vocab_path, "w");
   if (!vf) {
@@ -348,38 +343,22 @@ void bpe_save(const BpeTrainer *trainer, const char *model_path, const char *voc
     exit(EXIT_FAILURE);
   };
   for (size_t id = 0; id < total; ++id) {
-    uint32_t len = (uint32_t)strlen(trainer->token_strs[id]);
-    fwrite(&len, sizeof(len), 1, vf);
-    fwrite(trainer->token_strs[id], 1, len, vf);
-    fwrite(&trainer->token_freqs[id], sizeof(uint64_t), 1, vf);
+    fprintf(vf, "%s %llu\n", strs[id], (unsigned long long)freqs[id]);
   }
   fclose(vf);
-  printf("[DEBUG] Vocab file written\n");
+  printf("Vocab file written successfully at %s\n", vocab_path);
 
-  // Writing merge operations
-  printf("[DEBUG] Writing merges to %s\n", model_path);
+  // 5) Write merges file
+  printf("Writing merges to %s\n", model_path);
   FILE *mf = fopen(model_path, "w");
   if (!mf) {
     fprintf(stderr, "Couldn't open the model file at path: %s", model_path);
-    goto cleanup;
     exit(EXIT_FAILURE);
   }
   for (size_t i = 0; i < M; ++i) {
-    int32_t a = trainer->merge_ops[i].first;
-    int32_t b = trainer->merge_ops[i].second;
-    int32_t c = (int32_t)(initV + i);
-    fwrite(&a, sizeof(a), 1, mf);
-    fwrite(&b, sizeof(b), 1, mf);
-    fwrite(&c, sizeof(c), 1, mf);
+    PairKey op = trainer->merge_ops[i];
+    fprintf(mf, "%d %d %zu\n", op.first, op.second, initV + i);
   }
   fclose(mf);
-  printf("[DEBUG] Merges file written\n");
-
-cleanup:
-  // If we allocated temporary arrays, free them
-  if (strs != trainer->token_strs) {
-    for (size_t i = 0; i < total; ++i) free(strs[i]);
-    free(strs);
-    free(freqs);
-  }
+  printf("Merges file written successfully at %s\n", model_path);
 }

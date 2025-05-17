@@ -3,13 +3,13 @@
 #include "bpe.h"
 
 int main() {
-  const char* input_path = "train.txt";
+  const char* input_path = "training.txt";
   const char* model_path = "base.model";
   const char* vocab_path = "base.vocab";
 
   // ---- BPE config ----
   BPEConfig config;
-  config.target_vocab = 100;  // desired vocab size
+  config.target_vocab = 10000;  // desired vocab size
   config.unk_id = 0;
   config.num_threads = 1;
 
@@ -38,9 +38,6 @@ int main() {
 
   // ---- Save model and vocab ----
   bpe_save(trainer, model_path, vocab_path);
-  printf("Model saved to: %s\n", model_path);
-  printf("Vocab saved to: %s\n", vocab_path);
-
   // ---- Cleanup ----
   bpe_trainer_destroy(trainer);
   return 0;
