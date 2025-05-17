@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include "heap.h"
 #include "bpe.h"
-#include "inc/chash.h"
+#include "hash.h"
 
 /**
   @brief Swap two heap entries in-place.

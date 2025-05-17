@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 #include "heap.h"
-#include "inc/chash.h"
+#include "hash.h"
 
 #define  MIN_HEAP_SIZE  2048
 

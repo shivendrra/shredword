@@ -4,7 +4,7 @@
 #include <assert.h>
 #include "bpe.h"
 #include "trie.h"
-#include "inc/chash.h"
+#include "hash.h"
 
 struct BpeTrainer {
   BPEConfig config;   // user-settings
