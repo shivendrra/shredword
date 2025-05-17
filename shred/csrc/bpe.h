@@ -2,9 +2,13 @@
 #define __BPE__H__
 
 #include <stdint.h>
+#include "heap.h"
+#include "inc/chash.h"
+
+#define  MIN_HEAP_SIZE  2048
 
 typedef struct Symbol {
-  int id;   // cuttent token's id
+  int32_t id;   // cuttent token's id
   struct Symbol* prev;  // previous symbol in word
   struct Symbol* next;  // next symbol in word
 } Symbol;
@@ -17,7 +21,7 @@ typedef struct wordPos {
 typedef struct Info {
   uint64_t freq;   // frequency of a particular pair
   wordPos* positions;   // dynamic Array of occurances
-  size_t* pos_capacity;   // capacity of pos[]
+  size_t pos_capacity;   // capacity of pos[]
   size_t pos_size;  // current no of occurances
   uint32_t version;   // version for lazy validation
 } Info;
@@ -35,12 +39,14 @@ typedef struct {
 } BPEConfig;
 
 typedef struct BpeTrainer BpeTrainer;   // for handling the training part
+static BIMap bigram_map;  // global bigram→Info map for lazy invalidation
 
 extern "C" {
   BpeTrainer* bpe_trainer_create(const BPEConfig* config);
   void bpe_trainer_destroy(BpeTrainer* trainer);
 
   int bpe_loadCorpus(BpeTrainer* trainer, const char* input_path);
+  uint32_t bpe_get_current_version(const PairKey key);
   void bpe_initialize(BpeTrainer* trainer);
   void bpe_count_bigrams(BpeTrainer* trainer);
   int bpe_merge(BpeTrainer* trainer);
