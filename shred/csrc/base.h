@@ -14,8 +14,10 @@
 #define MAX_TOKENS 1000000   // Max tokens to be trained
 #define MAX_SEQ_LENGTH 4096   // BUffer length for loading sentences
 #define MIN_SYMBOL_LEN 32   // Symbols size (to be increased dynamically)
+#define MAX_MERGES  10000
 
 extern "C" {
+  void get_stats(const int* ids, int ids_size, int stats[MAX_MERGES][3]);
   int split_to_symbols(const char* line, char*** out_symbols);
   void load_and_split(const char* train_file, char**** out_symbols, int** out_lens, int* out_size);
 

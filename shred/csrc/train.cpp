@@ -6,6 +6,7 @@
 #include "train.h"
 #include "base.h"
 #include "heap.h"
+#include "trie.h"
 #include "threads.h"
 #include "inc/khash.h"
 

@@ -2,7 +2,11 @@
 #include <assert.h>
 #include "heap.h"
 
-// swap two heap entries
+/**
+  @brief Swap two heap entries in-place.
+  * @param x  Pointer to the first entry.
+  * @param y  Pointer to the second entry.
+ */
 static void he_swap(HeapEntry* x, HeapEntry* y) {
   if (x == NULL || y == NULL) {
     fprintf(stderr, "Error: HeapEntry pointers are Null.\n");
@@ -11,6 +15,11 @@ static void he_swap(HeapEntry* x, HeapEntry* y) {
   HeapEntry t = *x; *x = *y; *y = t;
 }
 
+/**
+  @brief Initialize a max‑heap.
+  @param h Pointer to MaxHeap struct to initialize.
+  @param capacity Initial capacity (number of entries) to reserve.
+*/
 void heap_init(MaxHeap* h, int capacity) {
   if (h == NULL) {
     fprintf(stderr, "Error: Heap pointer is Null.\n");
@@ -20,6 +29,13 @@ void heap_init(MaxHeap* h, int capacity) {
   h->size = 0; h->cap = capacity;
 }
 
+/**
+  @brief Push a key/frequency pair onto the heap.
+          Grows the underlying array if needed.
+  @param h Pointer to the heap.
+  @param key Null‑terminated string for the symbol (heap takes ownership).
+  @param freq Integer frequency used for ordering (max‑heap).
+ */
 void heap_push(MaxHeap* h, char* key, int freq) {
   if (h == NULL) {
     fprintf(stderr, "Error: Heap pointer is Null.\n");
@@ -42,6 +58,12 @@ void heap_push(MaxHeap* h, char* key, int freq) {
   }
 }
 
+/**
+  @brief Pop the top (highest-frequency) entry from the heap.
+          The returned HeapEntry.key must be freed by the caller.
+  @param h Pointer to the heap.
+  @return The popped HeapEntry.
+ */
 HeapEntry heap_pop(MaxHeap* h) {
   if (h == NULL) {
     fprintf(stderr, "Error: Heap pointer is Null.\n");
@@ -63,6 +85,11 @@ HeapEntry heap_pop(MaxHeap* h) {
   return top;
 }
 
+/**
+  @brief Check if the heap is empty.
+  @param h Pointer to the heap.
+  @return Non-zero if empty, zero otherwise.
+*/
 int heap_empty(MaxHeap* h) {
   if (h == NULL) {
     fprintf(stderr, "Error: Heap pointer is Null.\n");
@@ -71,6 +98,10 @@ int heap_empty(MaxHeap* h) {
   return h->size == 0;
 }
 
+/**
+  @brief Free all resources held by the heap (but not the heap struct itself).
+  @param h  Pointer to the heap.
+*/
 void heap_free(MaxHeap* h) {
   if (h == NULL) {
     fprintf(stderr, "Error: Heap pointer is Null, can't free the Memory.\n");

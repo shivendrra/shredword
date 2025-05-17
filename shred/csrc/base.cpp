@@ -4,6 +4,39 @@
 #include "base.h"
 #include "trie.h"
 
+void get_stats(const int* ids, int ids_size, int stats[MAX_MERGES][3]) {
+  for (int i = 0; i < MAX_MERGES; i++) {
+    stats[i][0] = -1;   // first token pair
+    stats[i][1] = -1;   // second token pair
+    stats[i][2] = 0;    // frequency
+  }
+
+  for (int i = 0; i < ids_size; i++) {
+    int idx1 = ids[i];
+    int idx2 = ids[i + 1];
+    int found = 0;
+
+    for (int j = 0; j < ids_size - 1; j++) {
+      if (stats[j][0] == idx1 && stats[j][1] == idx2) {
+        stats[j][2]++;
+        found = 1;
+        break;
+      }
+    }
+
+    if (!found) {
+      for (int j = 0; j < MAX_MERGES; j++) {
+        if (stats[j][0] == -1) {
+          stats[j][0] = idx1;
+          stats[j][1] = idx2;
+          stats[j][2] = 1;
+          break;
+        }
+      }
+    }
+  }
+}
+
 // Read a line, split on U+2581 marker into symbols array
 int split_to_symbols(const char* line, char*** out_symbols) {
   // worst case every byte is a separate UTF-8 symbol → allocate MAX_SEQ_LENGTH pointers
