@@ -3,15 +3,17 @@
 #include "bpe.h"
 
 int main() {
-  const char* input_path = "training.txt";
+  const char* input_path = "train.txt";
   const char* model_path = "base.model";
   const char* vocab_path = "base.vocab";
 
   // ---- BPE config ----
   BPEConfig config;
-  config.target_vocab = 10000;  // desired vocab size
+  config.target_vocab = 6000;  // desired vocab size
   config.unk_id = 0;
   config.num_threads = 1;
+  config.character_coverage = 0.99;
+  config.min_pair_freq = 100;
 
   // ---- Create trainer ----
   BpeTrainer* trainer = bpe_trainer_create(&config);
@@ -34,7 +36,6 @@ int main() {
     bpe_trainer_destroy(trainer);
     return 3;
   }
-  printf("Training complete. Merges: %d\n", result);
 
   // ---- Save model and vocab ----
   bpe_save(trainer, model_path, vocab_path);
