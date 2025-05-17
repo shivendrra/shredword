@@ -40,7 +40,6 @@ typedef struct {
   size_t nbuckets;
 } BIMap;
 
-
 extern "C" {
   // StrMap related functions ----
   void strmap_init(StrMap* map, size_t nbuckets);
