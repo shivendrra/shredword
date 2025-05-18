@@ -36,7 +36,7 @@ typedef struct BpeTrainer {
   BPEConfig config;   // user-settings
   MaxHeap heap;   // bigram merge items
   Corpus corpus;    // word-> countmap & symbol chains
-  BIMap bigram_map;  // global bigram→Info map
+  BIMap bigram_map;  // global bigram -> Info map
   size_t next_token_id; // next unused subword ID (starts at initial vocab size)
   size_t initial_vocab_size;
   size_t num_merges;    // how many merges have been applied
@@ -53,6 +53,7 @@ extern "C" {
 
   int bpe_loadCorpus(BpeTrainer* trainer, const char* input_path);
   uint32_t bpe_get_current_version(const PairKey key);
+  uint64_t recompute_freq(PairKey key, Info* info, BpeTrainer* trainer);
   void bpe_initialize(BpeTrainer* trainer);
   void bpe_count_bigrams(BpeTrainer* trainer);
   int bpe_merge(BpeTrainer* trainer);
