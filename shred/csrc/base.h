@@ -8,26 +8,20 @@
 #ifndef __BASE__H__
 #define __BASE__H__
 
-#include <cstddef>
-#include <ctype.h>
+#include "trie.h"
 
-#define NUM_CHARS 256
-#define  MAX_LINE_LENGTH  1024
-
-typedef struct TrieNode {
-  struct TrieNode *children[NUM_CHARS];
-  bool terminal;
-} TrieNode;
+#define MAX_LINE_LENGTH 1024  // Max length of line to be read
+#define MAX_TOKENS 1000000   // Max tokens to be trained
+#define MAX_SEQ_LENGTH 4096   // BUffer length for loading sentences
+#define MIN_SYMBOL_LEN 32   // Symbols size (to be increased dynamically)
+#define MAX_MERGES  10000
 
 extern "C" {
-  // functions for creating/modifying `trie`
-  TrieNode *create_node();
-  void trie_insert(TrieNode *root, const char* word);
-  int longest_prefix(TrieNode *root, const char* text);
-  void free_trie(TrieNode *node);   // freeing the trie from the memory
-  void print_trie(TrieNode *node);  // prints all the nodes recursively
+  void get_stats(const int* ids, int ids_size, int stats[MAX_MERGES][3]);
+  int split_to_symbols(const char* line, char*** out_symbols);
+  void load_and_split(const char* train_file, char**** out_symbols, int** out_lens, int* out_size);
 
-  char* normalize_text(const char* input);  // normalize input text to NFKC form and replace spaces with "▁"
+  // function for loading/saving vocabs
   void save_vocab(TrieNode* root, const char* file_prefix);
   void load_vocab(TrieNode* root, const char* model_file);
 }

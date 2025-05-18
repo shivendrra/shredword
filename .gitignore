@@ -4,6 +4,13 @@ __pycache__/
 *$py.class
 test data/
 
+*.exe
+test.py
+extra.py
+*.txt
+
+.vscode
+
 # Distribution / packaging
 .Python
 develop-eggs/
