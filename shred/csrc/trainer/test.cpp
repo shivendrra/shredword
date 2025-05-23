@@ -9,9 +9,8 @@ int main() {
 
   // ---- BPE config ----
   BPEConfig config;
-  config.target_vocab = 6000;  // desired vocab size
+  config.target_vocab = 300;  // desired vocab size
   config.unk_id = 0;
-  config.num_threads = 1;
   config.character_coverage = 0.99;
   config.min_pair_freq = 100;
 

@@ -67,7 +67,7 @@ void heap_push(MaxHeap* h, PairKey key, uint64_t freq, uint32_t version) {
       fprintf(stderr, "Pointer allocation failed!\n");
       exit(EXIT_FAILURE);
     }
-  }  
+  }
   // insert at end and sift up
   int idx = h->size++;
   h->data[idx].key = key;
@@ -103,9 +103,9 @@ HeapEntry heap_pop(MaxHeap* h) {
     // Sift down to restore max‑heap property
     size_t idx = 0;
     while (true) {
-      size_t left  = (idx << 1) + 1, right = left + 1, best  = idx;
-      if (left  < h->size && h->data[left].freq  > h->data[best].freq)  best = left;
-      if (right < h->size && h->data[right].freq > h->data[best].freq)  best = right;
+      size_t left = (idx << 1) + 1, right = left + 1, best = idx;
+      if (left < h->size && h->data[left].freq > h->data[best].freq) best = left;
+      if (right < h->size && h->data[right].freq > h->data[best].freq) best = right;
       if (best == idx) break;
       he_swap(&h->data[idx], &h->data[best]);
       idx = best;

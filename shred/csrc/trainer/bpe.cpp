@@ -96,6 +96,42 @@ static void load_entry_cb(const char* key, uint64_t val, void* user) {
   ctx->idx++;
 }
 
+void remove_occurrence(Info* info, size_t word_index, Symbol* pos) {
+  for (size_t i = 0; i < info->pos_size; ++i) {
+    if (info->positions[i].word_index == word_index && info->positions[i].pos == pos) {
+      info->positions[i] = info->positions[--info->pos_size];  // Swap-and-pop
+      return;
+    }
+  }
+}
+
+void append_occurrence(Info* info, size_t word_index, Symbol* pos) {
+  if (info->pos_size == info->pos_capacity) {
+    size_t new_cap = info->pos_capacity ? info->pos_capacity * 2 : 4;
+    info->positions = (wordPos*)realloc(info->positions, new_cap * sizeof(wordPos));
+    info->pos_capacity = new_cap;
+  }
+  info->positions[info->pos_size++] = (wordPos){ word_index, pos };
+}
+
+uint64_t recompute_freq(PairKey key, Info* info, BpeTrainer* trainer) {
+  uint64_t freq = 0;
+  size_t write_idx = 0;
+
+  for (size_t i = 0; i < info->pos_size; ++i) {
+    wordPos wp = info->positions[i];
+    Symbol* s = wp.pos;
+
+    if (s && s->next &&
+        s->id == key.first && s->next->id == key.second) {
+      freq += trainer->corpus.word_counts[wp.word_index];
+      info->positions[write_idx++] = wp;
+    }
+  }
+  info->pos_size = write_idx;
+  return freq;
+}
+
 /**
  @brief Allocate and initialize a new trainer.
  * @param config Pointer to user-supplied configuration struct.
@@ -300,23 +336,35 @@ int bpe_merge(BpeTrainer* trainer) {
   PairKey key = top.key;
   uint64_t freq = top.freq;
   int32_t new_id = (int32_t)(trainer->initial_vocab_size + trainer->num_merges);    // <- make new_id an int32_t to match PairKey
-  printf("[MERGE]\t Merging (%d,%d) freq=%llu -> new_id=%d\n", key.first, key.second, (unsigned long long)freq, new_id);
+  printf("[MERGE]\t (%d / %d) Merging (%d,%d) freq=%llu -> new_id=%d\n", new_id - trainer->initial_vocab_size, trainer->num_merges, key.first, key.second, (unsigned long long)freq, new_id);
 
   // Remember the op
   if (trainer->num_merges < trainer->config.target_vocab)
     trainer->merge_ops[trainer->num_merges] = key;
 
   Info* info = bimap_get(&bigram_map, key);
+  info->freq = recompute_freq(key, info, trainer);
   size_t occs = info->pos_size;
   wordPos* pts = info->positions;
 
+  printf("[STEP]\t Before merge: occs=%zu, info->freq=%llu\n", occs, (unsigned long long)info->freq);
   for (size_t i = 0; i < occs; ++i) {
     wordPos wp = pts[i];
     Symbol* a = wp.pos;
+    if (!a || !a->next) continue;  // safety
     Symbol* b = a->next;
-    uint64_t wc = trainer->corpus.word_counts[wp.word_index];
+    if (!b) continue;
 
-    // splice and assign new_id
+    uint64_t wc = trainer->corpus.word_counts[wp.word_index];
+    if (!a || !a->next) {
+      printf("[SKIP] Invalid pointer at occurrence %zu\n", i);
+      continue;
+    }
+    if (a == a->next) {
+      printf("[WARNING] Self-loop detected at word %zu\n", wp.word_index);
+      break;
+    }
+
     a->id = new_id;
     a->next = b->next;
     if (b->next) b->next->prev = a;
@@ -326,18 +374,26 @@ int bpe_merge(BpeTrainer* trainer) {
     if (a->prev) {
       PairKey lk = { a->prev->id, new_id };
       Info* li = bimap_get(&bigram_map, lk);
+      // remove_occurrence(li, wp.word_index, a->prev);
+      // append_occurrence(li, wp.word_index, a->prev);
+      li->freq = recompute_freq(lk, li, trainer);
       li->version++;
-      li->freq = wc;
-      heap_push(&trainer->heap, lk, li->freq, li->version);
+      if (li->freq >= trainer->config.min_pair_freq) {
+        heap_push(&trainer->heap, lk, li->freq, li->version);
+      }
     }
-
+    
     // right-context bigram
     if (a->next) {
       PairKey rk = { new_id, a->next->id };
       Info* ri = bimap_get(&bigram_map, rk);
+      // remove_occurrence(ri, wp.word_index, a);
+      // append_occurrence(ri, wp.word_index, a);
+      ri->freq = recompute_freq(rk, ri, trainer);
       ri->version++;
-      ri->freq = wc;
-      heap_push(&trainer->heap, rk, ri->freq, ri->version);
+      if (ri->freq >= trainer->config.min_pair_freq) {
+        heap_push(&trainer->heap, rk, ri->freq, ri->version);
+      }
     }
   }
   info->pos_size = 0;
@@ -383,8 +439,8 @@ int bpe_train(BpeTrainer* trainer) {
   // Merge until we have created target_vocab_size new tokens
   size_t merges = 0;
   while (merges < trainer->config.target_vocab) {
-    // if (bpe_merge_full(trainer) != 0) break;
-    if (bpe_merge(trainer) != 0) break;
+    if (bpe_merge_full(trainer) != 0) break;
+    // if (bpe_merge(trainer) != 0) break;
     merges++;
   }
   printf("[INFO]\t Training completed successfully. Merges: %d\n", (int)merges);
@@ -431,15 +487,16 @@ void bpe_save(const BpeTrainer* trainer, const char* model_path, const char* voc
   // Write vocab
   FILE* vf = fopen(vocab_path, "w");
   for (size_t i = 0; i < T; ++i) {
-    fprintf(vf, "%s %llu\n", toks[i], (unsigned long long)freq[i]);
+    fprintf(vf, "[%s] \t -%llu\n", toks[i], (unsigned long long)freq[i]);
   }
   fclose(vf);
 
   // Write merges
   FILE* mf = fopen(model_path, "wb");
+  fprintf(mf, "bpe: v1.1\n\n");
   for (size_t m = 0; m < M; ++m) {
     PairKey op = trainer->merge_ops[m];
-    fprintf(mf, "%d %d %zu\n", op.first, op.second, V0 + m);
+    fprintf(mf, "%d \t %d \t %zu\n", op.first, op.second, V0 + m);
   }
   fclose(mf);
 

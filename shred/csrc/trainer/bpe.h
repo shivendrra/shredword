@@ -5,7 +5,8 @@
 #include "heap.h"
 #include "hash.h"
 
-#define  MIN_HEAP_SIZE  2048
+#define  MIN_HEAP_SIZE  4096
+#define  INITIAL_VOCAB_SIZE  256  // UTF-8 base chars from 0 -> 255
 
 typedef struct Symbol {
   int32_t id;   // cuttent token's id
@@ -27,7 +28,6 @@ typedef struct Corpus {
 typedef struct {
   size_t target_vocab;    // desired vocab_size
   int32_t unk_id;   // ID to use for unknown tokens
-  int num_threads;    // threads for initial counting
   double  character_coverage;   // e.g. 0.995
   uint64_t min_pair_freq;       // e.g. 5
 } BPEConfig;
@@ -40,9 +40,9 @@ typedef struct BpeTrainer {
   size_t next_token_id; // next unused subword ID (starts at initial vocab size)
   size_t initial_vocab_size;
   size_t num_merges;    // how many merges have been applied
-  PairKey *merge_ops;     // array of length num_merges
-  char **token_strs;    // maps token ID -> UTF‑8 string
-  uint64_t *token_freqs;   // maps token ID -> frequency
+  PairKey* merge_ops;     // array of length num_merges
+  char** token_strs;    // maps token ID -> UTF‑8 string
+  uint64_t* token_freqs;   // maps token ID -> frequency
 } BpeTrainer;   // for handling the training part
 
 static BIMap bigram_map;  // global bigram→Info map for lazy invalidation
