@@ -335,84 +335,37 @@ int bpe_merge(BpeTrainer* trainer) {
   HeapEntry top = heap_pop(&trainer->heap);
   PairKey key = top.key;
   uint64_t freq = top.freq;
-  int32_t new_id = (int32_t)(trainer->initial_vocab_size + trainer->num_merges);    // <- make new_id an int32_t to match PairKey
-  printf("[MERGE]\t (%d / %d) Merging (%d,%d) freq=%llu -> new_id=%d\n", new_id - trainer->initial_vocab_size, trainer->num_merges, key.first, key.second, (unsigned long long)freq, new_id);
+  int32_t new_id = (int32_t)(trainer->initial_vocab_size + trainer->num_merges);
 
-  // Remember the op
+  printf("[MERGE]\t Merging (%d,%d) freq=%llu -> new_id=%d\n", key.first, key.second, (unsigned long long)freq, new_id);
   if (trainer->num_merges < trainer->config.target_vocab)
     trainer->merge_ops[trainer->num_merges] = key;
 
   Info* info = bimap_get(&bigram_map, key);
-  info->freq = recompute_freq(key, info, trainer);
   size_t occs = info->pos_size;
   wordPos* pts = info->positions;
 
-  printf("[STEP]\t Before merge: occs=%zu, info->freq=%llu\n", occs, (unsigned long long)info->freq);
   for (size_t i = 0; i < occs; ++i) {
     wordPos wp = pts[i];
     Symbol* a = wp.pos;
-    if (!a || !a->next) continue;  // safety
     Symbol* b = a->next;
     if (!b) continue;
 
-    uint64_t wc = trainer->corpus.word_counts[wp.word_index];
-    if (!a || !a->next) {
-      printf("[SKIP] Invalid pointer at occurrence %zu\n", i);
-      continue;
-    }
-    if (a == a->next) {
-      printf("[WARNING] Self-loop detected at word %zu\n", wp.word_index);
-      break;
-    }
-
+    // merge the pair
     a->id = new_id;
     a->next = b->next;
     if (b->next) b->next->prev = a;
     free(b);
-
-    // left-context bigram
-    if (a->prev) {
-      PairKey lk = { a->prev->id, new_id };
-      Info* li = bimap_get(&bigram_map, lk);
-      // remove_occurrence(li, wp.word_index, a->prev);
-      // append_occurrence(li, wp.word_index, a->prev);
-      li->freq = recompute_freq(lk, li, trainer);
-      li->version++;
-      if (li->freq >= trainer->config.min_pair_freq) {
-        heap_push(&trainer->heap, lk, li->freq, li->version);
-      }
-    }
-    
-    // right-context bigram
-    if (a->next) {
-      PairKey rk = { new_id, a->next->id };
-      Info* ri = bimap_get(&bigram_map, rk);
-      // remove_occurrence(ri, wp.word_index, a);
-      // append_occurrence(ri, wp.word_index, a);
-      ri->freq = recompute_freq(rk, ri, trainer);
-      ri->version++;
-      if (ri->freq >= trainer->config.min_pair_freq) {
-        heap_push(&trainer->heap, rk, ri->freq, ri->version);
-      }
-    }
   }
-  info->pos_size = 0;
-  info->freq = 0;
-  info->version++;
+
   trainer->num_merges++;
   return 0;
 }
 
-/**
- * Performs one merge and then fully rebuilds the bigram map & heap.
- * This matches “standard” BPE exactly (but is O(N) per merge).
- */
 int bpe_merge_full(BpeTrainer* trainer) {
-  // 1) Do the normal lazy merge step:
   int ret = bpe_merge(trainer);
   if (ret != 0) return ret;
 
-  // 2) Rebuild bigram map & heap from scratch:
   bimap_free(&bigram_map);
   bimap_init(&bigram_map, MIN_HEAP_SIZE);
 
@@ -496,7 +449,7 @@ void bpe_save(const BpeTrainer* trainer, const char* model_path, const char* voc
   fprintf(mf, "bpe: v1.1\n\n");
   for (size_t m = 0; m < M; ++m) {
     PairKey op = trainer->merge_ops[m];
-    fprintf(mf, "%d \t %d \t %zu\n", op.first, op.second, V0 + m);
+    fprintf(mf, "%d %d %zu\n", op.first, op.second, V0 + m);
   }
   fclose(mf);
 

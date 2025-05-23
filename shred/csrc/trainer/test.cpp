@@ -4,14 +4,14 @@
 
 int main() {
   const char* input_path = "train.txt";
-  const char* model_path = "base.model";
-  const char* vocab_path = "base.vocab";
+  const char* model_path = "base_1k.model";
+  const char* vocab_path = "base_1k.vocab";
 
   // ---- BPE config ----
   BPEConfig config;
-  config.target_vocab = 300;  // desired vocab size
+  config.target_vocab = 900;  // desired vocab size
   config.unk_id = 0;
-  config.character_coverage = 0.99;
+  config.character_coverage = 0.95;
   config.min_pair_freq = 100;
 
   // ---- Create trainer ----
