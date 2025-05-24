@@ -1,3 +1,11 @@
+/**
+ @file hash.h
+ @brief hasmap implementation for particularly training BPE merges
+
+ * string -> int value hashmap, maintaining version info, etc.
+ * separate hashing for Bigram related task.
+*/
+
 #ifndef __HASH_H__
 #define __HASH_H__
 

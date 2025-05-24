@@ -3,8 +3,8 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "heap.h"
-#include "bpe.h"
-#include "hash.h"
+#include "trainer/bpe.h"
+#include "inc/hash.h"
 
 /**
   @brief Swap two heap entries in-place.
@@ -24,7 +24,7 @@ static void he_swap(HeapEntry* x, HeapEntry* y) {
 */
 bool is_version_valid(const PairKey &key, uint32_t version) {
   // if the current version in the map matches, it’s valid
-  return bpe_get_current_version(key) == version;
+  // return bpe_get_current_version(key) == version;
 }
 
 /**

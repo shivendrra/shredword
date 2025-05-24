@@ -12,8 +12,8 @@
 #define __BPE__H__
 
 #include <stdint.h>
-#include "heap.h"
-#include "hash.h"
+#include "inc/heap.h"
+#include "inc/hash.h"
 
 #define  MIN_HEAP_SIZE  4096
 #define  INITIAL_VOCAB_SIZE  256  // UTF-8 base chars from 0 -> 255

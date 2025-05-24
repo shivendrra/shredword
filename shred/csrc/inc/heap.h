@@ -12,7 +12,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include "hash.h"
+#include "inc/hash.h"
 
 typedef struct HeapEntry {
   PairKey key;
