@@ -18,11 +18,13 @@
 #define  MIN_HEAP_SIZE  4096
 #define  INITIAL_VOCAB_SIZE  256  // UTF-8 base chars from 0 -> 255
 #define  INITIAL_STR_BUFFER  4096  // no of characters to be loaded
+#define  MAX_OCCS_PER_MERGE  50000
 
 typedef struct Symbol {
   int32_t id;  // current token's int value
   struct Symbol* prev;  // previous token
   struct Symbol* next;  // next token
+  bool deleted; // check deleted or not?
 } Symbol;
 
 typedef struct WordPos {
