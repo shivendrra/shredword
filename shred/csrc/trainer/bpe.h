@@ -12,8 +12,8 @@
 #define __BPE__H__
 
 #include <stdint.h>
-#include "inc/heap.h"
-#include "inc/hash.h"
+#include "../inc/heap.h"
+#include "../inc/hash.h"
 
 #define  MIN_HEAP_SIZE  4096
 #define  INITIAL_VOCAB_SIZE  256  // UTF-8 base chars from 0 -> 255
@@ -58,7 +58,13 @@ typedef struct Trainer {
 extern "C" {
   Trainer* create_trainer(const BPEConfig* config);
   void bpe_trainer_destroy(Trainer* trainer);
-  int bpe_load_corpus(Trainer* trainer, char* input_path);
+  int bpe_load_corpus(Trainer* trainer, const char* input_path);
+
+  void bpe_init(Trainer* trainer);
+  void bpe_count_bigrams(Trainer* trainer);
+  int bpe_merge_batch(Trainer* trainer, int batch_size);
+  int bpe_train(Trainer* trainer);
+  void bpe_save(const Trainer* trainer, const char* model_path, const char* vocab_path);
 }
 
 #endif

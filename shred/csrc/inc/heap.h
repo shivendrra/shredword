@@ -12,7 +12,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include "inc/hash.h"
+#include "hash.h"
 
 typedef struct HeapEntry {
   PairKey key;
@@ -31,7 +31,6 @@ extern "C" {
   void heap_init(MaxHeap* h, size_t capacity);
   void heap_push(MaxHeap* h, PairKey key, uint64_t freq, uint32_t version);
   HeapEntry heap_pop(MaxHeap* h); // removes & returns top
-  bool is_version_valid(const PairKey &key, uint32_t version);
   int heap_empty(MaxHeap* h);
   void heap_free(MaxHeap* h);
 }

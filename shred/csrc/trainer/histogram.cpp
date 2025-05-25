@@ -1,8 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "trainer/histogram.h"
-#include "trainer/bpe.h"
-#include "inc/hash.h"
+#include "histogram.h"
+#include "bpe.h"
+#include "../inc/hash.h"
 
 void build_symbol_cb(const char* w, uint64_t count, void* u) {
   BuildCtx* ctx = (BuildCtx*)u;

@@ -2,7 +2,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdio.h>
-#include "inc/hash.h"
+#include "hash.h"
 
 // --- Initialize a string map with given bucket count (power of two) ---
 void strmap_init(StrMap* map, size_t nbuckets) {

@@ -17,7 +17,7 @@
 #ifndef __HISTOGRAM__H__
 #define __HISTOGRAM__H__
 
-#include "inc/hash.h"
+#include "../inc/hash.h"
 
 typedef struct Trainer Trainer;   // forward declaration
 typedef struct Symbol Symbol;   // forward declaration
@@ -25,7 +25,7 @@ typedef struct Symbol Symbol;   // forward declaration
 struct load_ctx {
   Trainer* trainer;
   size_t idx;
-} load_ctx;
+};
 
 typedef struct {
   Trainer* trainer;

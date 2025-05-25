@@ -28,11 +28,11 @@ typedef struct PairKey {
   int32_t first, second;
 } PairKey;
 
-typedef struct wordPos wordPos;
+typedef struct WordPos WordPos;
 
 typedef struct Info {
   uint64_t freq;   // frequency of a particular pair
-  wordPos* positions;   // dynamic Array of occurances
+  WordPos* positions;   // dynamic Array of occurances
   size_t pos_capacity;   // capacity of pos[]
   size_t pos_size;  // current no of occurances
   uint32_t version;   // version for lazy validation

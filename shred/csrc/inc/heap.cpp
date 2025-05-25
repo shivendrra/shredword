@@ -3,8 +3,8 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "heap.h"
-#include "trainer/bpe.h"
-#include "inc/hash.h"
+#include "../trainer/bpe.h"
+#include "hash.h"
 
 /**
   @brief Swap two heap entries in-place.
@@ -19,20 +19,10 @@ static void he_swap(HeapEntry* x, HeapEntry* y) {
 }
 
 /**
- @brief Check whether a popped heap entry is still fresh.
-        Compares its version against the bigram-info table.
-*/
-bool is_version_valid(const PairKey &key, uint32_t version) {
-  // if the current version in the map matches, it’s valid
-  // return bpe_get_current_version(key) == version;
-}
-
-/**
   @brief Initialize a max‑heap.
   @param h Pointer to MaxHeap struct to initialize.
   @param capacity Initial capacity (number of entries) to reserve.
 */
-
 void heap_init(MaxHeap* h, size_t capacity) {
   if (h == NULL) {
     fprintf(stderr, "Error: Heap pointer is Null.\n");
@@ -93,27 +83,20 @@ HeapEntry heap_pop(MaxHeap* h) {
     exit(EXIT_FAILURE);
   }
   assert(h->size > 0);
-  HeapEntry top;
+  HeapEntry top = h->data[0];
 
-  do {
-    // Remove the current root
-    top = h->data[0];
-    h->data[0] = h->data[--h->size];
+  h->data[0] = h->data[--h->size];
 
-    // Sift down to restore max‑heap property
-    size_t idx = 0;
-    while (true) {
-      size_t left = (idx << 1) + 1, right = left + 1, best = idx;
-      if (left < h->size && h->data[left].freq > h->data[best].freq) best = left;
-      if (right < h->size && h->data[right].freq > h->data[best].freq) best = right;
-      if (best == idx) break;
-      he_swap(&h->data[idx], &h->data[best]);
-      idx = best;
-    }
+  size_t idx = 0;
+  while (true) {
+    size_t left = (idx << 1) + 1, right = left + 1, best = idx;
+    if (left < h->size && h->data[left].freq > h->data[best].freq) best = left;
+    if (right < h->size && h->data[right].freq > h->data[best].freq) best = right;
+    if (best == idx) break;
+    he_swap(&h->data[idx], &h->data[best]);
+    idx = best;
+  }
 
-    // If this entry’s version no longer matches the bigram’s current version,
-    // it’s stale—pop again.
-  } while (!is_version_valid(top.key, top.version));
   return top;
 }
 
