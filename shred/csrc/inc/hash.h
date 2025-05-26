@@ -1,3 +1,11 @@
+/**
+ @file hash.h
+ @brief hasmap implementation for particularly training BPE merges
+
+ * string -> int value hashmap, maintaining version info, etc.
+ * separate hashing for Bigram related task.
+*/
+
 #ifndef __HASH_H__
 #define __HASH_H__
 
@@ -20,13 +28,8 @@ typedef struct PairKey {
   int32_t first, second;
 } PairKey;
 
-typedef struct wordPos wordPos;
-
 typedef struct Info {
   uint64_t freq;   // frequency of a particular pair
-  wordPos* positions;   // dynamic Array of occurances
-  size_t pos_capacity;   // capacity of pos[]
-  size_t pos_size;  // current no of occurances
   uint32_t version;   // version for lazy validation
 } Info;
 

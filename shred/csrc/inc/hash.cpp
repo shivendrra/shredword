@@ -4,6 +4,17 @@
 #include <stdio.h>
 #include "hash.h"
 
+static uint32_t hash_pair(PairKey key) {
+  // using FNV-1a hash for better distribution
+  uint32_t hash = 2166136261u;
+  uint8_t* bytes = (uint8_t*)&key;
+  for (size_t i = 0; i < sizeof(PairKey); i++) {
+    hash ^= bytes[i];
+    hash *= 16777619u;
+  }
+  return hash;
+}
+
 // --- Initialize a string map with given bucket count (power of two) ---
 void strmap_init(StrMap* map, size_t nbuckets) {
   if (!map) {
@@ -95,7 +106,7 @@ Info* bimap_get(BIMap* map, PairKey key) {
     fprintf(stderr, "Pointer to Map not found!\n");
     exit(EXIT_FAILURE);
   }
-  uint32_t h = ((uint32_t)key.first * 9973) ^ (uint32_t)key.second;
+  uint32_t h = hash_pair(key); 
   size_t idx = h & (map->nbuckets - 1);
 
   // walk chain looking for existing entry
@@ -124,7 +135,7 @@ uint32_t bimap_version(const BIMap* map, PairKey key) {
     fprintf(stderr, "Pointer to Map not found!\n");
     exit(EXIT_FAILURE);
   }
-  uint32_t h = ((uint32_t)key.first * 9973) ^ (uint32_t)key.second;
+  uint32_t h = hash_pair(key); 
   size_t idx = h & (map->nbuckets - 1);
   for (BIEntry *e = map->buckets[idx]; e; e = e->next) {
     if (e->key.first == key.first && e->key.second == key.second)
