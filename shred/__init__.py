@@ -1,1 +1,1 @@
-from .main import Shred
+from ._trainer import BPETrainer
