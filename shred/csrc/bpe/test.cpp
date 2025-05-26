@@ -9,10 +9,10 @@ int main() {
 
   // ---- BPE config ----
   BPEConfig config;
-  config.target_vocab_size = 900;  // desired vocab size
+  config.target_vocab_size = 1500;  // desired vocab size
   config.unk_id = 0;
-  config.character_coverage = 0.95;
-  config.min_pair_freq = 100;
+  config.character_coverage = 0.995;
+  config.min_pair_freq = 2000;
 
   // ---- Create trainer ----
   Trainer* trainer = create_trainer(&config);

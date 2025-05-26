@@ -722,7 +722,12 @@ void bpe_save(const Trainer* trainer, const char* model_path, const char* vocab_
   FILE* mf = fopen(model_path, "wb");
   for (size_t m = 0; m < M; ++m) {
     PairKey op = trainer->merge_ops[m];
-    fprintf(mf, "%d %d %zu\n", op.first, op.second, INITIAL_VOCAB_SIZE + m);
+    int32_t a = (int32_t)op.first;
+    int32_t b = (int32_t)op.second;
+    int32_t new_id = (int32_t)(INITIAL_VOCAB_SIZE + m);
+    fwrite(&a, sizeof(int32_t), 1, mf);
+    fwrite(&b, sizeof(int32_t), 1, mf);
+    fwrite(&new_id, sizeof(int32_t), 1, mf);
   }
   fclose(mf);
 
