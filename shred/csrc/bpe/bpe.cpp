@@ -1,10 +1,61 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <unordered_map>
+#include <string.h>
 #include "../inc/hash.h"
 #include "../inc/heap.h"
 #include "histogram.h"
 #include "bpe.h"
+
+// Simple hash table for tracking frequency changes during merges
+typedef struct FreqChange {
+  uint64_t pair_hash;
+  int64_t delta;
+  struct FreqChange* next;
+} FreqChange;
+
+// Simple hash table for frequency changes
+#define FREQ_CHANGE_BUCKETS 1024
+
+typedef struct FreqChangeMap {
+  FreqChange* buckets[FREQ_CHANGE_BUCKETS];
+} FreqChangeMap;
+
+static void freq_change_init(FreqChangeMap* map) {
+  for (int i = 0; i < FREQ_CHANGE_BUCKETS; i++) {
+    map->buckets[i] = NULL;
+  }
+}
+
+static void freq_change_add(FreqChangeMap* map, uint64_t pair_hash, int64_t delta) {
+  size_t bucket = pair_hash % FREQ_CHANGE_BUCKETS;
+  
+  // Check if entry already exists
+  for (FreqChange* fc = map->buckets[bucket]; fc; fc = fc->next) {
+    if (fc->pair_hash == pair_hash) {
+      fc->delta += delta;
+      return;
+    }
+  }
+  
+  // Create new entry
+  FreqChange* new_fc = (FreqChange*)malloc(sizeof(FreqChange));
+  new_fc->pair_hash = pair_hash;
+  new_fc->delta = delta;
+  new_fc->next = map->buckets[bucket];
+  map->buckets[bucket] = new_fc;
+}
+
+static void freq_change_free(FreqChangeMap* map) {
+  for (int i = 0; i < FREQ_CHANGE_BUCKETS; i++) {
+    FreqChange* fc = map->buckets[i];
+    while (fc) {
+      FreqChange* next = fc->next;
+      free(fc);
+      fc = next;
+    }
+    map->buckets[i] = NULL;
+  }
+}
 
 /**
  @brief Recomputes the frequency of a given bigram in the current corpus.
@@ -322,7 +373,7 @@ void bpe_count_bigrams(Trainer* trainer) {
  @brief Perform a batch of BPE merges based on the most frequent bigrams.
  *
  * This function repeatedly pops the most frequent valid bigram from the heap and merges it,
- * updating affected bigrams’ frequencies using a hash-based difference tracking mechanism.
+ * updating affected bigrams' frequencies using a hash-based difference tracking mechanism.
  * This avoids expensive rescans or linear recomputations.
  *
  * The function maintains:
@@ -377,9 +428,10 @@ int bpe_merge_batch(Trainer* trainer, int batch_size) {
       trainer->merge_ops[trainer->num_merges] = key;
     }
 
-    // Track affected pairs and their frequency changes
-    std::unordered_map<uint64_t, int64_t> freq_changes;
-    uint64_t total_merges = 0;
+    // Track affected pairs and their frequency changes using our C hash table
+    FreqChangeMap freq_changes;
+    freq_change_init(&freq_changes);
+    uint64_t total_merge_count = 0;
         
     // Perform merges in all words
     for (size_t wi = 0; wi < trainer->corpus.vocab_size; ++wi) {
@@ -394,30 +446,33 @@ int bpe_merge_batch(Trainer* trainer, int batch_size) {
         }
 
         // Count this merge
-        total_merges += word_count;
+        total_merge_count += word_count;
         
         // Track frequency changes for neighboring pairs
         // Left neighbor
         if (s->prev && !s->prev->deleted) {
-          PairKey old_left = {s->prev->id, s->id}, new_left = {s->prev->id, new_id};
+          PairKey old_left = {s->prev->id, s->id};
+          PairKey new_left = {s->prev->id, new_id};
           uint64_t old_hash = ((uint64_t)old_left.first << 32) | (uint64_t)old_left.second;
           uint64_t new_hash = ((uint64_t)new_left.first << 32) | (uint64_t)new_left.second;
-          freq_changes[old_hash] -= (int64_t)word_count;
-          freq_changes[new_hash] += (int64_t)word_count;
+          freq_change_add(&freq_changes, old_hash, -(int64_t)word_count);
+          freq_change_add(&freq_changes, new_hash, (int64_t)word_count);
         }
         
         // Right neighbor  
         if (s->next->next && !s->next->next->deleted) {
-            PairKey old_right = {s->next->id, s->next->next->id}, new_right = {new_id, s->next->next->id};
-            uint64_t old_hash = ((uint64_t)old_right.first << 32) | (uint64_t)old_right.second;
-            uint64_t new_hash = ((uint64_t)new_right.first << 32) | (uint64_t)new_right.second;
-            freq_changes[old_hash] -= (int64_t)word_count;
-            freq_changes[new_hash] += (int64_t)word_count;
+          PairKey old_right = {s->next->id, s->next->next->id};
+          PairKey new_right = {new_id, s->next->next->id};
+          uint64_t old_hash = ((uint64_t)old_right.first << 32) | (uint64_t)old_right.second;
+          uint64_t new_hash = ((uint64_t)new_right.first << 32) | (uint64_t)new_right.second;
+          freq_change_add(&freq_changes, old_hash, -(int64_t)word_count);
+          freq_change_add(&freq_changes, new_hash, (int64_t)word_count);
         }
 
         // Perform the actual merge
         Symbol* b = s->next;
-        s->id = new_id, s->next = b->next;
+        s->id = new_id;
+        s->next = b->next;
         if (b->next) {
           b->next->prev = s;
         }
@@ -426,33 +481,43 @@ int bpe_merge_batch(Trainer* trainer, int batch_size) {
         // Don't advance s here - let the outer loop handle it
       }
     }
-    // Apply frequency changes
-    for (const auto& [pair_hash, delta] : freq_changes) {
-      PairKey pk = {(int32_t)(pair_hash >> 32), (int32_t)(pair_hash & 0xFFFFFFFF)};
-        
-      // Skip if this is the pair we just merged
-      if (pk.first == key.first && pk.second == key.second) {
-        continue;
-      }  
-      Info* pair_info = bimap_get(&trainer->bigram_map, pk);
-      // Apply frequency change safely
-      if (delta < 0) {
-        uint64_t abs_delta = (uint64_t)(-delta);
-        if (pair_info->freq >= abs_delta) {
-          pair_info->freq -= abs_delta;
-        } else {
-          pair_info->freq = 0;
-        }
-      } else {
-        pair_info->freq += (uint64_t)delta;
-      }
 
-      // Add to heap if frequency meets threshold
-      if (pair_info->freq >= min_freq) {
-        pair_info->version++;
-        heap_push(&trainer->heap, pk, pair_info->freq, pair_info->version);
+    // Apply frequency changes
+    for (int i = 0; i < FREQ_CHANGE_BUCKETS; i++) {
+      for (FreqChange* fc = freq_changes.buckets[i]; fc; fc = fc->next) {
+        uint64_t pair_hash = fc->pair_hash;
+        int64_t delta = fc->delta;
+        
+        PairKey pk = {(int32_t)(pair_hash >> 32), (int32_t)(pair_hash & 0xFFFFFFFF)};
+        
+        // Skip if this is the pair we just merged
+        if (pk.first == key.first && pk.second == key.second) {
+          continue;
+        }
+        
+        Info* pair_info = bimap_get(&trainer->bigram_map, pk);
+        // Apply frequency change safely
+        if (delta < 0) {
+          uint64_t abs_delta = (uint64_t)(-delta);
+          if (pair_info->freq >= abs_delta) {
+            pair_info->freq -= abs_delta;
+          } else {
+            pair_info->freq = 0;
+          }
+        } else {
+          pair_info->freq += (uint64_t)delta;
+        }
+
+        // Add to heap if frequency meets threshold
+        if (pair_info->freq >= min_freq) {
+          pair_info->version++;
+          heap_push(&trainer->heap, pk, pair_info->freq, pair_info->version);
+        }
       }
     }
+
+    // Clean up frequency changes map
+    freq_change_free(&freq_changes);
 
     // Mark the merged pair as processed
     info->freq = 0;
@@ -460,7 +525,7 @@ int bpe_merge_batch(Trainer* trainer, int batch_size) {
     trainer->num_merges++;
     merges_done++;
     
-    printf("[DEBUG]\t Merged %llu occurrences in corpus\n", (unsigned long long)total_merges);
+    printf("[DEBUG]\t Merged %llu occurrences in corpus\n", (unsigned long long)total_merge_count);
   }
   if (stale_entries > 0) {
     printf("[DEBUG]\t Skipped %d stale heap entries\n", stale_entries);
