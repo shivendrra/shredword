@@ -75,7 +75,7 @@ Trainer* create_trainer(const BPEConfig* config) {
   }
   // defaulting min pair freq value
   if (trainer->config.min_pair_freq == 0) {
-    trainer->config.min_pair_freq = 100;
+    trainer->config.min_pair_freq = MIN_PAIR_FREQ;
   }
   trainer->num_merges = 0;
   trainer->merge_ops = (PairKey*)malloc(sizeof(PairKey) * trainer->config.target_vocab_size);

@@ -4,8 +4,8 @@
       with help of hashing & heaps for faster merges.
   * main entry point file code for BPE-trainer related codebase.
   * compile it as:
-    *- '.so': g++ -shared -fPIC -o libtrainer.so trainer/bpe.cpp trainer/histogram.cpp inc/hash.cpp inc/heap.cpp
-    *- '.dll': g++ -shared -o libtrainer.dll trainer/bpe.cpp trainer/histogram.cpp inc/hash.cpp inc/heap.cpp
+    *- '.so': g++ -shared -fPIC -o libtrainer.so bpe/bpe.cpp bpe/histogram.cpp inc/hash.cpp inc/heap.cpp
+    *- '.dll': g++ -shared -o libtrainer.dll bpe/bpe.cpp bpe/histogram.cpp inc/hash.cpp inc/heap.cpp
 */
 
 #ifndef __BPE__H__
@@ -19,6 +19,7 @@
 #define  INITIAL_VOCAB_SIZE  256  // UTF-8 base chars from 0 -> 255
 #define  INITIAL_STR_BUFFER  4096  // no of characters to be loaded
 #define  MAX_OCCS_PER_MERGE  50000
+#define  MIN_PAIR_FREQ  2000
 
 typedef struct Symbol {
   int32_t id;  // current token's int value
