@@ -195,7 +195,7 @@ static int insert_or_increment(VocabTable* table, const char* s, size_t len) {
       return 0;
     }
     probe++;
-    h = (h + probe*  probe) % table->capacity;
+    h = (h + probe * probe) % table->capacity;
   }
     
   // Create new entry
