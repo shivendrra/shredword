@@ -8,20 +8,30 @@
 #ifndef __TRIE__H__
 #define __TRIE__H__
 
-#define  NUM_CHARS  256   // Maximum initial letters, since UTF-8 so 0-255
+#include <stdint.h>
+#include <stddef.h>
+#include <stdbool.h>
+
+#define NUM_CHARS 256   // Maximum initial letters, since UTF-8 so 0-255
+
+// Forward declarations
+typedef struct StringInterner StringInterner;
+typedef struct HashVocabEntry HashVocabEntry;
 
 typedef struct TrieNode {
   struct TrieNode* children[256];
-  bool terminal;
-} TrieNode;   // Trie-based dtype to store possible vocabs
+  uint64_t frequency;
+  uint32_t string_id;
+  uint16_t depth;
+  bool is_terminal;
+} TrieNode; // Trie node for efficient substring storage
 
 extern "C" {
-  TrieNode* create_node();
-  void trie_insert(TrieNode* root, const char* word);
-  int longest_prefix(TrieNode* root, const char* text);
-  int trie_count_words(TrieNode* node);   // freeing the trie from the memory
-  void print_trie(TrieNode* node);   // prints all the nodes recursively
-  void free_trie(TrieNode* node);
+  TrieNode* trie_create_node();
+  void trie_insert(TrieNode* root, StringInterner* interner, const char* str, size_t len, size_t min_freq);
+  void trie_collect_entries(TrieNode* node, HashVocabEntry* entries, size_t* count, size_t max_count, StringInterner* interner);
+  void trie_free(TrieNode* node);
+  int trie_count_words(TrieNode* node);
 }
 
 #endif
