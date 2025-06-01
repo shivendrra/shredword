@@ -46,7 +46,7 @@ void trie_collect_entries(TrieNode* node, HashVocabEntry* entries, size_t* count
       .string_id = node->string_id,
       .frequency = node->frequency,
       .score = 0.0,
-      .length = interner_get_length(interner, node->string_id)
+      .length = (uint16_t)interner_get_length(interner, node->string_id)
     };
     (*count)++;
   }
