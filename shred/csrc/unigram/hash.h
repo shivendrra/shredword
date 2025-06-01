@@ -49,15 +49,6 @@ typedef struct VocabBuilder {
   size_t max_entries;
 } VocabBuilder; // Optimized vocabulary builder
 
-typedef struct FastVocabLookup {
-  uint32_t* hash_table;
-  HashVocabEntry* entries;
-  StringInterner* interner;
-  uint32_t capacity;
-  uint32_t count;
-  uint32_t hash_mask;
-} FastVocabLookup;  // Fast lookup table for finalized vocabulary
-
 extern "C" {
   // Memory arena functions
   MemoryArena* arena_create(size_t size);
@@ -76,11 +67,6 @@ extern "C" {
   void vocab_builder_add_line(VocabBuilder* builder, const char* line, size_t max_subword_len);
   size_t vocab_builder_finalize(VocabBuilder* builder, HashVocabEntry** out_entries);
   void vocab_builder_free(VocabBuilder* builder);
-
-  // Fast lookup functions
-  FastVocabLookup* fast_lookup_create(HashVocabEntry* entries, size_t count, StringInterner* interner);
-  int fast_lookup_find(const FastVocabLookup* lookup, const char* str, size_t len);
-  void fast_lookup_free(FastVocabLookup* lookup);
 }
 
 #endif  //!__HASH__H__
