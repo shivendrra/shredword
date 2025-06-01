@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include "histogram.h"
 #include "bpe.h"
-#include "../inc/hash.h"
+#include "hash.h"
 
 void build_symbol_cb(const char* w, uint64_t count, void* u) {
   BuildCtx* ctx = (BuildCtx*)u;
