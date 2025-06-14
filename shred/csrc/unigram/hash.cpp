@@ -6,6 +6,8 @@
 #include "../trie.h"
 #include "hash.h"
 
+#define  C_UINT32_MAX  0xFFFFFFFF
+
 // faster hash functions
 static inline uint32_t xxhash32(const void* data, size_t len, uint32_t seed) {
   const uint8_t* p = (const uint8_t*)data;
@@ -99,7 +101,7 @@ StringInterner* interner_create(uint32_t capacity) {
   interner->arena = arena_create(1024 * 1024); // 1MB initial
   
   for (uint32_t i = 0; i < capacity; i++) {
-    interner->hash_table[i] = UINT32_MAX;
+    interner->hash_table[i] = C_UINT32_MAX;
   }
   
   return interner;
@@ -110,7 +112,7 @@ uint32_t interner_add(StringInterner* interner, const char* str, uint32_t len) {
   uint32_t idx = hash & interner->hash_mask;
   
   // Linear probing
-  while (interner->hash_table[idx] != UINT32_MAX) {
+  while (interner->hash_table[idx] != C_UINT32_MAX) {
     uint32_t existing_id = interner->hash_table[idx];
     InternedString* existing = &interner->strings[existing_id];
     
@@ -125,7 +127,7 @@ uint32_t interner_add(StringInterner* interner, const char* str, uint32_t len) {
   // Add new string
   if (interner->count >= interner->capacity * 0.75) {
     fprintf(stderr, "[ERROR] String interner full\n");
-    return UINT32_MAX;
+    return C_UINT32_MAX;
   }
   
   uint32_t new_id = interner->count++;
@@ -196,24 +198,22 @@ void vocab_builder_add_line(VocabBuilder* builder, const char* line, size_t max_
   }
 }
 
-// Comparison function for qsort (descending frequency order)
-static int compare_vocab_entries(const void* a, const void* b) {
-  const HashVocabEntry* entry_a = (const HashVocabEntry*)a;
-  const HashVocabEntry* entry_b = (const HashVocabEntry*)b;
-  
-  if (entry_a->frequency > entry_b->frequency) return -1;
-  if (entry_a->frequency < entry_b->frequency) return 1;
-  return 0;
-}
-
 size_t vocab_builder_finalize(VocabBuilder* builder, HashVocabEntry** out_entries) {
   HashVocabEntry* entries = (HashVocabEntry*)malloc(sizeof(HashVocabEntry) * builder->max_entries);
   size_t count = 0;
   
   trie_collect_entries(builder->root, entries, &count, builder->max_entries, builder->interner);
+  // Sort by frequency (descending)
+  for (size_t i = 0; i < count - 1; i++) {
+    for (size_t j = i + 1; j < count; j++) {
+      if (entries[i].frequency < entries[j].frequency) {
+        HashVocabEntry temp = entries[i];
+        entries[i] = entries[j];
+        entries[j] = temp;
+      }
+    }
+  }
   
-  // Sort by frequency (descending) using qsort
-  qsort(entries, count, sizeof(HashVocabEntry), compare_vocab_entries);
   // Compute log probabilities
   uint64_t total_freq = 0;
   for (size_t i = 0; i < count; i++) {
@@ -239,4 +239,63 @@ void vocab_builder_free(VocabBuilder* builder) {
   free(builder->freq_buffer);
   free(builder->id_buffer);
   free(builder);
+}
+
+// Fast lookup functions
+FastVocabLookup* fast_lookup_create(HashVocabEntry* entries, size_t count, StringInterner* interner) {
+  uint32_t capacity = 1;
+  while (capacity < count * 2) capacity <<= 1;
+  
+  FastVocabLookup* lookup = (FastVocabLookup*)malloc(sizeof(FastVocabLookup));
+  lookup->hash_table = (uint32_t*)malloc(sizeof(uint32_t) * capacity);
+  lookup->entries = entries;
+  lookup->interner = interner;
+  lookup->capacity = capacity;
+  lookup->count = count;
+  lookup->hash_mask = capacity - 1;
+  
+  for (uint32_t i = 0; i < capacity; i++) {
+    lookup->hash_table[i] = C_UINT32_MAX;
+  }
+  
+  // Build hash table
+  for (uint32_t i = 0; i < count; i++) {
+    const char* str = interner_get_string(interner, entries[i].string_id);
+    uint32_t len = entries[i].length;
+    uint32_t hash = xxhash32(str, len, 0);
+    uint32_t idx = hash & lookup->hash_mask;
+    
+    while (lookup->hash_table[idx] != C_UINT32_MAX) {
+      idx = (idx + 1) & lookup->hash_mask;
+    }
+    
+    lookup->hash_table[idx] = i;
+  }
+  
+  return lookup;
+}
+
+int fast_lookup_find(const FastVocabLookup* lookup, const char* str, size_t len) {
+  uint32_t hash = xxhash32(str, len, 0);
+  uint32_t idx = hash & lookup->hash_mask;
+  
+  while (lookup->hash_table[idx] != C_UINT32_MAX) {
+    uint32_t entry_idx = lookup->hash_table[idx];
+    const HashVocabEntry* entry = &lookup->entries[entry_idx];
+    const char* entry_str = interner_get_string(lookup->interner, entry->string_id);
+    
+    if (entry->length == len && memcmp(entry_str, str, len) == 0) {
+      return entry_idx;
+    }
+    
+    idx = (idx + 1) & lookup->hash_mask;
+  }
+  
+  return -1;
+}
+
+void fast_lookup_free(FastVocabLookup* lookup) {
+  if (!lookup) return;
+  free(lookup->hash_table);
+  free(lookup);
 }
