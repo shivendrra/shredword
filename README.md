@@ -1,5 +1,6 @@
 # ShredWord
-ShredWord is a byte-pair encoding (BPE) based tokenizer designed for efficient and flexible text processing. It offers training, encoding, and decoding functionalities and is backed by a C/C++ core with a Python interface for easy integration into machine learning workflows.
+
+ShredWord is a byte-pair encoding (BPE) based tokenizer-trainer designed for fast, efficient, and flexible text processing & vocab training. It offers training, and text normalization functionalities and is backed by a C/C++ core with a Python interface for easy integration into machine learning workflows.
 
 ## Features
 
@@ -8,13 +9,14 @@ ShredWord is a byte-pair encoding (BPE) based tokenizer designed for efficient a
 3. **Save and Load Models**: Supports saving and loading trained tokenizers for reuse.
 4. **Python Integration**: Provides a Python interface for seamless integration and usability.
 
-
 ## How It Works
 
 ### Byte-Pair Encoding (BPE)
+
 BPE is a subword tokenization algorithm that compresses a dataset by merging the most frequent pairs of characters or subwords into new tokens. This process continues until a predefined vocabulary size is reached.
 
 Key steps:
+
 1. Initialize the vocabulary with all unique characters in the dataset.
 2. Count the frequency of character pairs.
 3. Merge the most frequent pair into a new token.
@@ -25,74 +27,42 @@ ShredWord implements this process efficiently in C/C++, exposing training, encod
 ## Installation
 
 ### Prerequisites
-- Python 3.7+
+
+- Python 3.11+
 - GCC or a compatible compiler (for compiling the C/C++ code)
 
 ### Steps
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/shivendrra/shredword.git
-   cd shredword
-   ```
 
-2. Compile the shared library:
-   ```bash
-   g++ -shared -fPIC -o build/libtoken.dll main.cpp base.cpp
-   ```
+1. Install the Python package from [PyPI.org](https://pypi.org/project/shredword-trainer/):
 
-3. Install the Python package:
    ```bash
-   pip install .
+   pip install shredword-trainer
    ```
-
 
 ## Usage
 
 Below is a simple example demonstrating how to use ShredWord for training, encoding, and decoding text.
 
 ### Example
+
 ```python
-from shredword import Shred
+from shredword.trainer import BPETrainer
 
-tokenizer = Shred()
-input_file = "test data/training_data.txt"
-
-# Load training data
-with open(input_file, "r", encoding="utf-8") as f:
-  text = f.read()
-
-# Uncomment to train a new tokenizer
-# VOCAB_SIZE = 556
-# tokenizer.train(text, VOCAB_SIZE)
-# tokenizer.save("vocab/trained_vocab")
-
-# Load a pre-trained tokenizer
-tokenizer.load("vocab/trained_vocab.model")
-
-# Encode text
-encoded = tokenizer.encode(text)
-print("Encoded:", encoded)
-
-# Decode text
-decoded = tokenizer.decode(encoded)
-print("Decoded:", decoded)
+trainer = BPETrainer(target_vocab_size=500, min_pair_freq=1000)
+trainer.load_corpus("test data/final.txt")
+trainer.train()
+trainer.save("model/merges_1k.model", "model/vocab_1k.vocab")
 ```
-
-### Output
-- **Encoded**: A list of token IDs representing the input text.
-- **Decoded**: The original text reconstructed from the token IDs.
-
 
 ## API Overview
 
 ### Core Methods
+
 - `train(text, vocab_size)`: Train a tokenizer on the input text to a specified vocabulary size.
-- `encode(text)`: Convert input text into a list of token IDs.
-- `decode(ids)`: Reconstruct text from token IDs.
 - `save(file_path)`: Save the trained tokenizer to a file.
-- `load(file_path)`: Load a pre-trained tokenizer from a file.
 
 ### Properties
+
 - `merges`: View or set the merge rules for tokenization.
 - `vocab`: Access the vocabulary as a dictionary of token IDs to strings.
 - `pattern`: View or set the regular expression pattern used for token splitting.
@@ -101,6 +71,7 @@ print("Decoded:", decoded)
 ## Advanced Features
 
 ### Saving and Loading
+
 Trained tokenizers can be saved to a file and reloaded for use in future tasks. The saved model includes merge rules and any special tokens or patterns defined during training.
 
 ```python
@@ -112,6 +83,7 @@ tokenizer.load("vocab/trained_vocab.model")
 ```
 
 ### Customization
+
 Users can define special tokens or modify the merge rules and pattern directly using the provided properties.
 
 ```python

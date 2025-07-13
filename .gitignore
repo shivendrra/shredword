@@ -4,10 +4,11 @@ __pycache__/
 *$py.class
 test data/
 
+build
+
 *.exe
 test.py
 extra.py
-*.txt
 
 .vscode
 

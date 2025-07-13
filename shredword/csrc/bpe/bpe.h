@@ -4,16 +4,17 @@
       with help of hashing & heaps for faster merges.
   * main entry point file code for BPE-trainer related codebase.
   * compile it as:
-    *- '.so': g++ -shared -fPIC -o libtrainer.so bpe/bpe.cpp bpe/histogram.cpp inc/hash.cpp inc/heap.cpp
-    *- '.dll': g++ -shared -o libtrainer.dll bpe/bpe.cpp bpe/histogram.cpp inc/hash.cpp inc/heap.cpp
+    *- '.so': g++ -shared -fPIC -o libbpe.so bpe/bpe.cpp bpe/histogram.cpp bpe/hash.cpp bpe/heap.cpp
+    *- '.dll': g++ -shared -o libbpe.dll bpe/bpe.cpp bpe/histogram.cpp bpe/hash.cpp bpe/heap.cpp
+    *- '.dylib': g++ -dynamiclib -o libbpe.dylib bpe/bpe.cpp bpe/histogram.cpp bpe/hash.cpp bpe/heap.cpp
 */
 
 #ifndef __BPE__H__
 #define __BPE__H__
 
 #include <stdint.h>
-#include "../inc/heap.h"
-#include "../inc/hash.h"
+#include "heap.h"
+#include "hash.h"
 
 #define  MIN_HEAP_SIZE  4096
 #define  INITIAL_VOCAB_SIZE  256  // UTF-8 base chars from 0 -> 255

@@ -17,7 +17,7 @@
 #ifndef __HISTOGRAM__H__
 #define __HISTOGRAM__H__
 
-#include "../inc/hash.h"
+#include "hash.h"
 
 typedef struct Trainer Trainer;   // forward declaration
 typedef struct Symbol Symbol;   // forward declaration
