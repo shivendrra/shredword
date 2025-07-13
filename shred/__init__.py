@@ -1,1 +1,1 @@
-from ._trainer import BPETrainer
+from .trainer import BPETrainer
