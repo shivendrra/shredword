@@ -18,14 +18,14 @@ endif()
 
 find_package(Python COMPONENTS Interpreter Development.Module REQUIRED)
 
-file(GLOB_RECURSE CSRC_FILES "shred/csrc/*.c" "shred/csrc/*.cpp")
-file(GLOB_RECURSE INC_FILES "shred/inc/*.h" "shred/inc/*.hpp")
+file(GLOB_RECURSE CSRC_FILES "shredword/csrc/*.c" "shredword/csrc/*.cpp")
+file(GLOB_RECURSE INC_FILES "shredword/inc/*.h" "shredword/inc/*.hpp")
 
 message(STATUS "Found source files: ${CSRC_FILES}")
 message(STATUS "Found header files: ${INC_FILES}")
 
 if(NOT CSRC_FILES)
-  message(FATAL_ERROR "No source files found in shred/csrc/")
+  message(FATAL_ERROR "No source files found in shredword/csrc/")
 endif()
 
 add_library(trainer SHARED ${CSRC_FILES})
@@ -38,4 +38,4 @@ else()
 endif()
 
 install(TARGETS trainer DESTINATION shredword COMPONENT python_modules)
-install(DIRECTORY shred/ DESTINATION shredword COMPONENT python_modules FILES_MATCHING PATTERN "*.py")
+install(DIRECTORY shredword/ DESTINATION shredword COMPONENT python_modules FILES_MATCHING PATTERN "*.py")
